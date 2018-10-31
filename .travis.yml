@@ -21,6 +21,12 @@ env:
   - TESTS="1" ODOO_REPO="odoo/odoo" MAKEPOT="1"
 
 install:
+#  FIXME:
+  - git clone --branch 12.0-recurrence-mechanism-on-contract-line https://github.com/sbejaoui/contract.git PR207
+  - rm -rf contract && cp -ar PR207/contract .
+  - git clone --branch 12.0-adjust-contract-sale-to-new-contract https://github.com/sbejaoui/contract.git PR203
+  - cp -ar PR203/contract_sale .
+#  TODO: To remove before merge
   - git clone --depth=1 https://github.com/OCA/maintainer-quality-tools.git ${HOME}/maintainer-quality-tools
   - export PATH=${HOME}/maintainer-quality-tools/travis:${PATH}
   - travis_install_nightly
