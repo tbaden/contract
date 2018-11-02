@@ -21,7 +21,7 @@ class AccountAnalyticInvoiceLine(models.Model):
     date_start = fields.Date(string='Date Start', default=fields.Date.today())
     date_end = fields.Date(string='Date End', index=True)
     recurring_next_date = fields.Date(
-        default=fields.Date.today(), copy=False, string='Date of Next Invoice'
+        copy=False, string='Date of Next Invoice'
     )
     create_invoice_visibility = fields.Boolean(
         compute='_compute_create_invoice_visibility'
@@ -41,10 +41,19 @@ class AccountAnalyticInvoiceLine(models.Model):
         readonly=True,
     )
 
-    @api.onchange('date_start')
+    @api.onchange('date_start', 'recurring_invoicing_type')
     def _onchange_date_start(self):
-        if self.date_start:
-            self.recurring_next_date = self.date_start
+        for rec in self:
+            if rec.date_start and rec.recurring_invoicing_type:
+                if rec.recurring_invoicing_type == 'pre-paid':
+                    rec.recurring_next_date = rec.date_start
+                else:
+                    rec.recurring_next_date = (
+                        rec.date_start
+                        + rec.get_relative_delta(
+                            rec.recurring_rule_type, rec.recurring_interval
+                        )
+                    )
 
     @api.constrains('recurring_next_date', 'date_start')
     def _check_recurring_next_date_start_date(self):
@@ -111,13 +120,15 @@ class AccountAnalyticInvoiceLine(models.Model):
             date_ref = contract.recurring_next_date
             domain.append(('contract_id', '=', contract.id))
 
-        domain.extend([
-            ('contract_id.recurring_invoices', '=', True),
-            ('recurring_next_date', '<=', date_ref),
-            '|',
-            ('date_end', '=', False),
-            ('date_end', '>=', date_ref),
-        ])
+        domain.extend(
+            [
+                ('contract_id.recurring_invoices', '=', True),
+                ('recurring_next_date', '<=', date_ref),
+                '|',
+                ('date_end', '=', False),
+                ('date_end', '>=', date_ref),
+            ]
+        )
         lines = self.search(domain).filtered('create_invoice_visibility')
         if lines:
             return lines._recurring_create_invoice()

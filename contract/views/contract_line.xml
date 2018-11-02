@@ -19,7 +19,7 @@
                     <field name="date_end"/>
                 </group>
                 <group>
-                    <field name="recurring_next_date" required="1"/>
+                    <field name="recurring_next_date"/>
                 </group>
             </xpath>
         </field>
