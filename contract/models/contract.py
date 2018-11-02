@@ -108,8 +108,10 @@ class AccountAnalyticAccount(models.Model):
         new_lines = []
         for contract_line in contract.recurring_invoice_line_ids:
             vals = contract_line._convert_to_write(contract_line.read()[0])
-            # Remove template link field named as analytic account field
-            vals.pop('analytic_account_id', False)
+            # Remove template link field
+            vals.pop('contract_template_id', False)
+            vals['date_start'] = fields.Date.today()
+            vals['recurring_next_date'] = fields.Date.today()
             new_lines.append((0, 0, vals))
         return new_lines
 
@@ -197,3 +199,7 @@ class AccountAnalyticAccount(models.Model):
         self.env['account.analytic.invoice.line'].recurring_create_invoice(
             self
         )
+
+    @api.model
+    def cron_recurring_create_invoice(self):
+        self.env['account.analytic.invoice.line'].recurring_create_invoice()
