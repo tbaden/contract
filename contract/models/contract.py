@@ -131,12 +131,16 @@ class AccountAnalyticAccount(models.Model):
                     % self.name
                 )
         if not journal:
-            journal = self.journal_id or self.env['account.journal'].search(
-                [
-                    ('type', '=', self.contract_type),
-                    ('company_id', '=', self.company_id.id),
-                ],
-                limit=1,
+            journal = (
+                self.journal_id
+                if self.journal_id.type == self.contract_type
+                else self.env['account.journal'].search(
+                    [
+                        ('type', '=', self.contract_type),
+                        ('company_id', '=', self.company_id.id),
+                    ],
+                    limit=1,
+                )
             )
         if not journal:
             raise ValidationError(
