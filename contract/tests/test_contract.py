@@ -238,12 +238,10 @@ class TestContract(TestContractBase):
         self.assertAlmostEqual(self.acct_line.price_subtotal, 100.0)
 
     def test_check_journal(self):
-        contract_no_journal = self.contract.copy()
-        contract_no_journal.journal_id = False
         journal = self.env['account.journal'].search([('type', '=', 'sale')])
         journal.write({'type': 'general'})
         with self.assertRaises(ValidationError):
-            contract_no_journal.recurring_create_invoice()
+            self.contract.recurring_create_invoice()
 
     def test_check_date_end(self):
         with self.assertRaises(ValidationError):
