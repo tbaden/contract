@@ -40,15 +40,15 @@ class AccountAnalyticAccount(models.Model):
         compute='_compute_create_invoice_visibility'
     )
     recurring_next_date = fields.Date(
-        compute='_compute_recurring_next_date',
-        string='Date of Next Invoice',
+        compute='_compute_recurring_next_date', string='Date of Next Invoice'
     )
 
     @api.depends('recurring_invoice_line_ids')
     def _compute_recurring_next_date(self):
         for contract in self:
             recurring_next_date = contract.recurring_invoice_line_ids.filtered(
-                'create_invoice_visibility').mapped('recurring_next_date')
+                'create_invoice_visibility'
+            ).mapped('recurring_next_date')
             if recurring_next_date:
                 contract.recurring_next_date = min(recurring_next_date)
 
@@ -112,6 +112,7 @@ class AccountAnalyticAccount(models.Model):
             vals.pop('contract_template_id', False)
             vals['date_start'] = fields.Date.today()
             vals['recurring_next_date'] = fields.Date.today()
+            self.recurring_invoice_line_ids._onchange_date_start()
             new_lines.append((0, 0, vals))
         return new_lines
 
