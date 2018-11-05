@@ -7,6 +7,10 @@ from odoo.exceptions import ValidationError
 from odoo.tests import common
 
 
+def to_date(date):
+    return fields.Date.to_date(date)
+
+
 class TestContractBase(common.SavepointCase):
     @classmethod
     def setUpClass(cls):
@@ -126,7 +130,7 @@ class TestContract(TestContractBase):
         self.assertEqual(self.acct_line.price_unit, 10)
 
     def test_contract(self):
-        recurring_next_date = fields.Date.to_date('2016-03-29')
+        recurring_next_date = to_date('2016-03-29')
         self.assertAlmostEqual(self.acct_line.price_subtotal, 50.0)
         res = self.acct_line._onchange_product_id()
         self.assertIn('uom_id', res['domain'])
@@ -150,7 +154,7 @@ class TestContract(TestContractBase):
         )
 
     def test_contract_daily(self):
-        recurring_next_date = fields.Date.to_date('2016-03-01')
+        recurring_next_date = to_date('2016-03-01')
         self.acct_line.recurring_next_date = '2016-02-29'
         self.acct_line.recurring_rule_type = 'daily'
         self.contract.pricelist_id = False
@@ -164,7 +168,7 @@ class TestContract(TestContractBase):
         )
 
     def test_contract_weekly(self):
-        recurring_next_date = fields.Date.to_date('2016-03-07')
+        recurring_next_date = to_date('2016-03-07')
         self.acct_line.recurring_next_date = '2016-02-29'
         self.acct_line.recurring_rule_type = 'weekly'
         self.acct_line.recurring_invoicing_type = 'post-paid'
@@ -178,7 +182,7 @@ class TestContract(TestContractBase):
         )
 
     def test_contract_yearly(self):
-        recurring_next_date = fields.Date.to_date('2017-02-28')
+        recurring_next_date = to_date('2017-02-28')
         self.acct_line.recurring_next_date = '2016-02-29'
         self.acct_line.recurring_rule_type = 'yearly'
         self.contract.recurring_create_invoice()
@@ -191,7 +195,7 @@ class TestContract(TestContractBase):
         )
 
     def test_contract_monthly_lastday(self):
-        recurring_next_date = fields.Date.to_date('2016-03-31')
+        recurring_next_date = to_date('2016-03-31')
         self.acct_line.recurring_next_date = '2016-02-29'
         self.acct_line.recurring_invoicing_type = 'post-paid'
         self.acct_line.recurring_rule_type = 'monthlylastday'
@@ -212,7 +216,7 @@ class TestContract(TestContractBase):
         )
 
     def test_onchange_date_start(self):
-        recurring_next_date = fields.Date.to_date('2016-01-01')
+        recurring_next_date = to_date('2016-01-01')
         self.acct_line.date_start = recurring_next_date
         self.acct_line._onchange_date_start()
         self.assertEqual(
@@ -427,3 +431,120 @@ class TestContract(TestContractBase):
             show_contract,
             'There was an error and the view couldn\'t be opened.',
         )
+
+    def test_compute_first_recurring_next_date(self):
+        """Test different combination to compute recurring_next_date
+        Combination format
+        {
+            'recurring_next_date': (      # date
+                date_start,               # date
+                recurring_invoicing_type, # ('pre-paid','post-paid',)
+                recurring_rule_type,      # ('daily', 'weekly', 'monthly',
+                                          #  'monthlylastday', 'yearly'),
+                recurring_interval,       # integer
+            ),
+        }
+        """
+
+        def error_message(
+            date_start,
+            recurring_invoicing_type,
+            recurring_rule_type,
+            recurring_interval,
+        ):
+            return "Error in %s every %d %s case, start with %s " % (
+                recurring_invoicing_type,
+                recurring_interval,
+                recurring_rule_type,
+                date_start,
+            )
+
+        combinations = {
+            to_date('2018-01-01'): (
+                to_date('2018-01-01'),
+                'pre-paid',
+                'monthly',
+                1,
+            ),
+            to_date('2018-01-01'): (
+                to_date('2018-01-01'),
+                'pre-paid',
+                'monthly',
+                2,
+            ),
+            to_date('2018-02-01'): (
+                to_date('2018-01-01'),
+                'post-paid',
+                'monthly',
+                1,
+            ),
+            to_date('2018-03-01'): (
+                to_date('2018-01-01'),
+                'post-paid',
+                'monthly',
+                2,
+            ),
+            to_date('2018-01-05'): (
+                to_date('2018-01-31'),
+                'post-paid',
+                'monthlylastday',
+                1,
+            ),
+            to_date('2018-01-05'): (
+                to_date('2018-01-31'),
+                'pre-paid',
+                'monthlylastday',
+                1,
+            ),
+            to_date('2018-01-05'): (
+                to_date('2018-02-28'),
+                'pre-paid',
+                'monthlylastday',
+                2,
+            ),
+            to_date('2018-01-05'): (
+                to_date('2018-01-05'),
+                'pre-paid',
+                'yearly',
+                1,
+            ),
+            to_date('2019-01-05'): (
+                to_date('2018-01-05'),
+                'post-paid',
+                'yearly',
+                1,
+            ),
+        }
+        contract_line_env = self.env['account.analytic.invoice.line']
+        for recurring_next_date, combination in combinations.items():
+            self.assertEqual(
+                recurring_next_date,
+                contract_line_env._compute_first_recurring_next_date(
+                    *combination
+                ),
+                error_message(*combination),
+            )
+
+    def test_recurring_next_date(self):
+        """recurring next date for a contract is the min for all lines"""
+        self.contract.recurring_create_invoice()
+        self.assertEqual(
+            self.contract.recurring_next_date,
+            min(
+                self.contract.recurring_invoice_line_ids.mapped(
+                    'recurring_next_date'
+                )
+            ),
+        )
+
+    def test_date_end(self):
+        """recurring next date for a contract is the min for all lines"""
+        self.assertFalse(self.contract.date_end)
+        self.acct_line.date_end = '2018-01-01'
+        self.assertEqual(
+            self.contract.date_end,
+            max(self.contract.recurring_invoice_line_ids.mapped('date_end')),
+        )
+        self.acct_line.copy()
+        self.acct_line.date_end = False
+        self.assertFalse(self.contract.date_end)
