@@ -41,6 +41,24 @@ class AccountAnalyticInvoiceLine(models.Model):
         readonly=True,
     )
 
+    @api.model
+    def _compute_first_recurring_next_date(
+        self,
+        date_start,
+        recurring_invoicing_type,
+        recurring_rule_type,
+        recurring_interval,
+    ):
+        if recurring_rule_type == 'monthlylastday':
+            return date_start + self.get_relative_delta(
+                recurring_rule_type, recurring_interval - 1
+            )
+        if recurring_invoicing_type == 'pre-paid':
+            return date_start
+        return date_start + self.get_relative_delta(
+            recurring_rule_type, recurring_interval
+        )
+
     @api.onchange(
         'date_start',
         'recurring_invoicing_type',
@@ -49,23 +67,12 @@ class AccountAnalyticInvoiceLine(models.Model):
     )
     def _onchange_date_start(self):
         for rec in self.filtered('date_start'):
-            if rec.recurring_rule_type == 'monthlylastday':
-                rec.recurring_next_date = (
-                    rec.date_start
-                    + rec.get_relative_delta(
-                        rec.recurring_rule_type, rec.recurring_interval - 1
-                    )
-                )
-            else:
-                if rec.recurring_invoicing_type == 'pre-paid':
-                    rec.recurring_next_date = rec.date_start
-                else:
-                    rec.recurring_next_date = (
-                        rec.date_start
-                        + rec.get_relative_delta(
-                            rec.recurring_rule_type, rec.recurring_interval
-                        )
-                    )
+            rec.recurring_next_date = self._compute_first_recurring_next_date(
+                rec.date_start,
+                rec.recurring_invoicing_type,
+                rec.recurring_rule_type,
+                rec.recurring_interval,
+            )
 
     @api.constrains('recurring_next_date', 'date_start')
     def _check_recurring_next_date_start_date(self):

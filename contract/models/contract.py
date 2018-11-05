@@ -52,10 +52,8 @@ class AccountAnalyticAccount(models.Model):
     def _compute_date_end(self):
         for contract in self:
             contract.date_end = False
-            date_end = contract.recurring_invoice_line_ids.filtered(
-                'date_end'
-            ).mapped('date_end')
-            if date_end:
+            date_end = contract.recurring_invoice_line_ids.mapped('date_end')
+            if date_end and all(date_end):
                 contract.date_end = max(date_end)
 
     @api.depends('recurring_invoice_line_ids.recurring_next_date')
