@@ -201,9 +201,9 @@ class AccountAnalyticAccount(models.Model):
 
     @api.multi
     def recurring_create_invoice(self):
-        self.env['account.analytic.invoice.line'].recurring_create_invoice(
-            self
-        )
+        return self.env[
+            'account.analytic.invoice.line'
+        ].recurring_create_invoice(self)
 
     @api.model
     def cron_recurring_create_invoice(self):
