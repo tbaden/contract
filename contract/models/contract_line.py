@@ -41,10 +41,22 @@ class AccountAnalyticInvoiceLine(models.Model):
         readonly=True,
     )
 
-    @api.onchange('date_start', 'recurring_invoicing_type')
+    @api.onchange(
+        'date_start',
+        'recurring_invoicing_type',
+        'recurring_rule_type',
+        'recurring_interval',
+    )
     def _onchange_date_start(self):
-        for rec in self:
-            if rec.date_start and rec.recurring_invoicing_type:
+        for rec in self.filtered('date_start'):
+            if rec.recurring_rule_type == 'monthlylastday':
+                rec.recurring_next_date = (
+                    rec.date_start
+                    + rec.get_relative_delta(
+                        rec.recurring_rule_type, rec.recurring_interval - 1
+                    )
+                )
+            else:
                 if rec.recurring_invoicing_type == 'pre-paid':
                     rec.recurring_next_date = rec.date_start
                 else:
