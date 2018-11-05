@@ -228,7 +228,6 @@ class AccountAnalyticInvoiceLine(models.Model):
                 line.recurring_rule_type, line.recurring_interval
             )
             line.recurring_next_date = new_date
-        self.mapped('contract_id')._compute_recurring_next_date()
 
     @api.model
     def get_relative_delta(self, recurring_rule_type, interval):

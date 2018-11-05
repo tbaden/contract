@@ -48,6 +48,7 @@
                     />
                     <field name="pricelist_id"/>
                     <field name="recurring_next_date"/>
+                    <field name="date_end"/>
                     <field name="company_id" groups="base.group_multi_company"/>
                 </group>
                 <label for="recurring_invoice_line_ids"
@@ -162,6 +163,26 @@
                         domain="[('recurring_invoices','=',True)]"
                         />
                 <separator/>
+                <filter name="not_finished"
+                        string="Valid"
+                        domain="['|', ('date_end', '=', False), ('date_end', '&gt;=', time.strftime('%Y-%m-%d'))]"
+                        />
+                <filter name="finished"
+                        string="Finished"
+                        domain="[('date_end', '&lt;', time.strftime('%Y-%m-%d'))]"
+                        />
+                <group expand="0" string="Group By...">
+                    <filter name="next_invoice"
+                            string="Next Invoice"
+                            domain="[]"
+                            context="{'group_by':'recurring_next_date'}"
+                            />
+                    <filter name="date_end"
+                            string="Date End"
+                            domain="[]"
+                            context="{'group_by':'date_end'}"
+                            />
+                </group>
             </field>
         </field>
     </record>
