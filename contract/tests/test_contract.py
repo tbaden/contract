@@ -459,64 +459,46 @@ class TestContract(TestContractBase):
                 date_start,
             )
 
-        combinations = {
-            to_date('2018-01-01'): (
+        combinations = [
+            (
                 to_date('2018-01-01'),
-                'pre-paid',
-                'monthly',
-                1,
+                (to_date('2018-01-01'), 'pre-paid', 'monthly', 1),
             ),
-            to_date('2018-01-01'): (
+            (
                 to_date('2018-01-01'),
-                'pre-paid',
-                'monthly',
-                2,
+                (to_date('2018-01-01'), 'pre-paid', 'monthly', 2),
             ),
-            to_date('2018-02-01'): (
-                to_date('2018-01-01'),
-                'post-paid',
-                'monthly',
-                1,
+            (
+                to_date('2018-02-01'),
+                (to_date('2018-01-01'), 'post-paid', 'monthly', 1),
             ),
-            to_date('2018-03-01'): (
-                to_date('2018-01-01'),
-                'post-paid',
-                'monthly',
-                2,
+            (
+                to_date('2018-03-01'),
+                (to_date('2018-01-01'), 'post-paid', 'monthly', 2),
             ),
-            to_date('2018-01-05'): (
+            (
                 to_date('2018-01-31'),
-                'post-paid',
-                'monthlylastday',
-                1,
+                (to_date('2018-01-05'), 'post-paid', 'monthlylastday', 1),
             ),
-            to_date('2018-01-05'): (
+            (
                 to_date('2018-01-31'),
-                'pre-paid',
-                'monthlylastday',
-                1,
+                (to_date('2018-01-06'), 'pre-paid', 'monthlylastday', 1),
             ),
-            to_date('2018-01-05'): (
+            (
                 to_date('2018-02-28'),
-                'pre-paid',
-                'monthlylastday',
-                2,
+                (to_date('2018-01-05'), 'pre-paid', 'monthlylastday', 2),
             ),
-            to_date('2018-01-05'): (
+            (
                 to_date('2018-01-05'),
-                'pre-paid',
-                'yearly',
-                1,
+                (to_date('2018-01-05'), 'pre-paid', 'yearly', 1),
             ),
-            to_date('2019-01-05'): (
-                to_date('2018-01-05'),
-                'post-paid',
-                'yearly',
-                1,
+            (
+                to_date('2019-01-05'),
+                (to_date('2018-01-05'), 'post-paid', 'yearly', 1),
             ),
-        }
+        ]
         contract_line_env = self.env['account.analytic.invoice.line']
-        for recurring_next_date, combination in combinations.items():
+        for recurring_next_date, combination in combinations:
             self.assertEqual(
                 recurring_next_date,
                 contract_line_env._compute_first_recurring_next_date(
