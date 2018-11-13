@@ -40,6 +40,14 @@ class AccountAnalyticInvoiceLine(models.Model):
         store=True,
         readonly=True,
     )
+    origin_id = fields.Many2one(
+        comodel_name='account.analytic.invoice.line',
+        string="Origin Contract Line",
+        required=False,
+        readonly=True,
+        copy=False,
+        help="Contract Line origin of this one.",
+    )
 
     @api.model
     def _compute_first_recurring_next_date(
@@ -248,3 +256,44 @@ class AccountAnalyticInvoiceLine(models.Model):
             return relativedelta(months=interval, day=31)
         else:
             return relativedelta(years=interval)
+
+    @api.multi
+    def start(self):
+        self.ensure_one()
+        context = {'default_contract_line_id': self.id}
+        context.update(self.env.context)
+        view_id = self.env.ref(
+            'contract.account_analytic_invoice_line_wizard_start_form_view'
+        ).id
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Contracts',
+            'res_model': 'account.analytic.invoice.line.wizard',
+            'view_type': 'form',
+            'view_mode': 'form',
+            'views': [(view_id, 'form')],
+            'target': 'new',
+            'context': context,
+        }
+
+    @api.multi
+    def stop(self):
+        self.ensure_one()
+        context = {
+            'default_contract_line_id': self.id,
+            'default_date_end': self.date_end,
+        }
+        context.update(self.env.context)
+        view_id = self.env.ref(
+            'contract.account_analytic_invoice_line_wizard_stop_form_view'
+        ).id
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Contracts',
+            'res_model': 'account.analytic.invoice.line.wizard',
+            'view_type': 'form',
+            'view_mode': 'form',
+            'views': [(view_id, 'form')],
+            'target': 'new',
+            'context': context,
+        }

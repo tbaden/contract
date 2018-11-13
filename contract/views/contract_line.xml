@@ -21,6 +21,9 @@
                 <group>
                     <field name="recurring_next_date"/>
                 </group>
+                <group>
+                    <field name="origin_id"/>
+                </group>
             </xpath>
         </field>
     </record>
