@@ -40,6 +40,14 @@ class AccountAnalyticInvoiceLine(models.Model):
         store=True,
         readonly=True,
     )
+    origin_id = fields.Many2one(
+        comodel_name='account.analytic.invoice.line',
+        string="Origin Contract Line",
+        required=False,
+        readonly=True,
+        copy=False,
+        help="Contract Line origin of this one.",
+    )
 
     @api.model
     def _compute_first_recurring_next_date(
@@ -248,3 +256,78 @@ class AccountAnalyticInvoiceLine(models.Model):
             return relativedelta(months=interval, day=31)
         else:
             return relativedelta(years=interval)
+
+    @api.multi
+    def stop(self, date_end):
+        return self.write({'date_end': date_end})
+
+    @api.multi
+    def _copy_for_start(self, date_start, date_end, recurring_next_date=False):
+        self.ensure_one()
+        if not recurring_next_date:
+            recurring_next_date = self._compute_first_recurring_next_date(
+                date_start,
+                self.recurring_invoicing_type,
+                self.recurring_rule_type,
+                self.recurring_interval,
+            )
+        new_vals = self.read()[0]
+        new_vals.pop("id", None)
+        new_vals.pop("parent_id", None)
+        new_vals.pop("child_ids", None)
+        values = self._convert_to_write(new_vals)
+        values['date_start'] = date_start
+        values['date_end'] = date_end
+        values['recurring_next_date'] = recurring_next_date
+        values['origin_id'] = self.id
+        return self.create(values)
+
+    @api.multi
+    def start(self, date_start, date_end, recurring_next_date=False):
+        contract_line = self.env['account.analytic.invoice.line']
+        for rec in self:
+            contract_line |= rec._copy_for_start(
+                date_start, date_end, recurring_next_date
+            )
+        return contract_line
+
+    @api.multi
+    def action_start(self):
+        self.ensure_one()
+        context = {'default_contract_line_id': self.id}
+        context.update(self.env.context)
+        view_id = self.env.ref(
+            'contract.account_analytic_invoice_line_wizard_start_form_view'
+        ).id
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Reactivate contract line',
+            'res_model': 'account.analytic.invoice.line.wizard',
+            'view_type': 'form',
+            'view_mode': 'form',
+            'views': [(view_id, 'form')],
+            'target': 'new',
+            'context': context,
+        }
+
+    @api.multi
+    def action_stop(self):
+        self.ensure_one()
+        context = {
+            'default_contract_line_id': self.id,
+            'default_date_end': self.date_end,
+        }
+        context.update(self.env.context)
+        view_id = self.env.ref(
+            'contract.account_analytic_invoice_line_wizard_stop_form_view'
+        ).id
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Suspend contract line',
+            'res_model': 'account.analytic.invoice.line.wizard',
+            'view_type': 'form',
+            'view_mode': 'form',
+            'views': [(view_id, 'form')],
+            'target': 'new',
+            'context': context,
+        }
