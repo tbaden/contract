@@ -87,7 +87,7 @@ class AccountAbstractAnalyticContractLine(models.AbstractModel):
         comodel_name='product.pricelist', string='Pricelist'
     )
     recurring_next_date = fields.Date(
-        copy=False, string='Date of Next Invoice'
+        string='Date of Next Invoice'
     )
 
     @api.depends(

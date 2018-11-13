@@ -20,6 +20,7 @@
     'website': 'https://github.com/oca/contract',
     'depends': ['base', 'account', 'analytic'],
     'data': [
+        'wizards/account_analytic_invoice_line_wizard.xml',
         'security/ir.model.access.csv',
         'security/contract_security.xml',
         'report/report_contract.xml',
