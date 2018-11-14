@@ -75,14 +75,22 @@
                             <field name="recurring_next_date" required="1"/>
                             <field name="create_invoice_visibility" invisible="1"/>
                             <field name="origin_id" invisible="1"/>
+                            <field name="state" groups="base.group_no_one"/>
                             <button name="action_start"
                                     string="Start"
                                     type="object"
-                                    icon="fa-play text-success"/>
+                                    icon="fa-play text-success"
+                                    states="suspended,close"/>
+                            <button name="action_pause"
+                                    string="Pause"
+                                    type="object"
+                                    icon="fa-pause text-muted"
+                                    states="open"/>
                             <button name="action_stop"
                                     string="Stop"
                                     type="object"
-                                    icon="fa-stop text-danger"/>
+                                    icon="fa-stop text-danger"
+                                    states="open,suspended"/>
                         </tree>
                     </field>
                 </div>
