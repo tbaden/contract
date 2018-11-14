@@ -46,6 +46,17 @@ class AccountAnalyticInvoiceLine(models.Model):
         copy=False,
         help="Contract Line origin of this one.",
     )
+    state = fields.Selection(
+        string="State",
+        selection=[
+            ('open', 'Open'),
+            ('suspended', 'Suspended'),
+            ('permanently_suspended', 'Permanently Suspended'),
+            ('close', 'Closed'),
+        ],
+        default='open',
+        required=True,
+    )
 
     @api.model
     def _compute_first_recurring_next_date(
@@ -257,7 +268,10 @@ class AccountAnalyticInvoiceLine(models.Model):
 
     @api.multi
     def stop(self, date_end):
-        return self.write({'date_end': date_end})
+        stop_states = ['open', 'suspended']
+        if [x for x in self.mapped('state') if x not in stop_states]:
+            raise ValidationError(_("Can't start a line at this state"))
+        return self.write({'date_end': date_end, 'state': 'close'})
 
     @api.multi
     def _prepare_value_for_start(
@@ -275,6 +289,7 @@ class AccountAnalyticInvoiceLine(models.Model):
         new_vals.pop("id", None)
         values = self._convert_to_write(new_vals)
         values['date_start'] = date_start
+        values['state'] = 'open'
         values['date_end'] = date_end
         values['recurring_next_date'] = recurring_next_date
         values['origin_id'] = self.id
@@ -282,14 +297,25 @@ class AccountAnalyticInvoiceLine(models.Model):
 
     @api.multi
     def start(self, date_start, date_end, recurring_next_date=False):
+        start_states = ['suspended', 'close']
         contract_line = self.env['account.analytic.invoice.line']
         for rec in self:
+            if rec.state not in start_states:
+                raise ValidationError(_("Can't start a line at this state"))
             contract_line |= self.create(
                 rec._prepare_value_for_start(
                     date_start, date_end, recurring_next_date
                 )
             )
+        self.write({'state': 'permanently_suspended'})
         return contract_line
+
+    @api.multi
+    def pause(self, date_end):
+        pause_states = ['open']
+        if self.mapped('state') != pause_states:
+            raise ValidationError(_("Can't pause a line at this state"))
+        return self.write({'date_end': date_end, 'state': 'suspended'})
 
     @api.multi
     def action_start(self):
@@ -320,6 +346,25 @@ class AccountAnalyticInvoiceLine(models.Model):
         context.update(self.env.context)
         view_id = self.env.ref(
             'contract.account_analytic_invoice_line_wizard_stop_form_view'
+        ).id
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Suspend contract line',
+            'res_model': 'account.analytic.invoice.line.wizard',
+            'view_type': 'form',
+            'view_mode': 'form',
+            'views': [(view_id, 'form')],
+            'target': 'new',
+            'context': context,
+        }
+
+    @api.multi
+    def action_pause(self):
+        self.ensure_one()
+        context = {'default_contract_line_id': self.id}
+        context.update(self.env.context)
+        view_id = self.env.ref(
+            'contract.account_analytic_invoice_line_wizard_pause_form_view'
         ).id
         return {
             'type': 'ir.actions.act_window',

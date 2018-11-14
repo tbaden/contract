@@ -49,6 +49,30 @@
         </field>
     </record>
 
+    <record model="ir.ui.view" id="account_analytic_invoice_line_wizard_pause_form_view">
+        <field name="name">account.analytic.invoice.line.start.wizard.form (in contract)</field>
+        <field name="model">account.analytic.invoice.line.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <group>
+                    <field name="contract_line_id" invisible="True"/>
+                    <field name="date_start" required="True"/>
+                    <field name="date_end"/>
+                </group>
+                <footer>
+                    <button name="pause"
+                            string="Validate"
+                            class="btn-primary"
+                            type="object"/>
+                    <button string="Cancel"
+                            class="btn-default"
+                            special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+
 
 
 </odoo>

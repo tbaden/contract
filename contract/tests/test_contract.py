@@ -126,17 +126,30 @@ class TestContract(TestContractBase):
         return wizard
 
     def _create_start_wizard(
-        self,
-        acct_line,
-        default_date_start,
-        default_date_end,
-        default_recurring_next_date,
+        self, acct_line, default_date_start, default_date_end
     ):
         action = acct_line.with_context(
             default_date_end=default_date_end,
             default_date_start=default_date_start,
-            default_recurring_next_date=default_recurring_next_date,
         ).action_start()
+        wizard = self.env[action['res_model']].create(
+            {
+                'contract_line_id': action['context'][
+                    'default_contract_line_id'
+                ],
+                'date_end': action['context']['default_date_end'],
+                'date_start': action['context']['default_date_start'],
+            }
+        )
+        return wizard
+
+    def _create_pause_wizard(
+        self, acct_line, default_date_start, default_date_end
+    ):
+        action = acct_line.with_context(
+            default_date_end=default_date_end,
+            default_date_start=default_date_start,
+        ).action_pause()
         wizard = self.env[action['res_model']].create(
             {
                 'contract_line_id': action['context'][
@@ -573,8 +586,13 @@ class TestContract(TestContractBase):
         wizard = self._create_stop_wizard(
             self.acct_line, to_date('2018-01-01')
         )
+        self.acct_line.state = 'permanently_suspended'
+        with self.assertRaises(ValidationError):
+            wizard.stop()
+        self.acct_line.state = 'open'
         wizard.stop()
         self.assertEqual(self.acct_line.date_end, to_date('2018-01-01'))
+        self.assertEqual(self.acct_line.state, 'close')
 
     def test_start_contract_line(self):
         wizard_stop = self._create_stop_wizard(
@@ -582,28 +600,50 @@ class TestContract(TestContractBase):
         )
         wizard_stop.stop()
         wizard_start = self._create_start_wizard(
-            self.acct_line,
-            to_date('2018-03-01'),
-            to_date('2018-09-01'),
-            to_date('2018-03-01'),
+            self.acct_line, to_date('2018-03-01'), to_date('2018-09-01')
         )
+        self.acct_line.state = 'permanently_suspended'
+        with self.assertRaises(ValidationError):
+            wizard_start.start()
+        self.acct_line.state = 'close'
         wizard_start.start()
         new_line = self.env['account.analytic.invoice.line'].search(
             [('origin_id', '=', self.acct_line.id)]
         )
         self.assertTrue(new_line, "should create a new contract line")
+        self.assertEqual(new_line.state, 'open')
         self.assertEqual(
             new_line.date_start,
             to_date('2018-03-01'),
-            "New contract line error by wizard start : start_date",
+            "New contract line error by wizard start : date_start",
         )
         self.assertEqual(
             new_line.date_end,
             to_date('2018-09-01'),
-            "New contract line error by wizard start : start_end",
+            "New contract line error by wizard start : date_end",
+        )
+
+    def test_pause_contract_line(self):
+        self.acct_line.date_end = '2019-01-01'
+        self.acct_line.recurring_next_date = '2018-01-01'
+        self.acct_line.date_start = '2018-01-01'
+        wizard_start = self._create_pause_wizard(
+            self.acct_line, to_date('2018-03-01'), to_date('2018-03-31')
+        )
+        wizard_start.pause()
+        new_line = self.env['account.analytic.invoice.line'].search(
+            [('origin_id', '=', self.acct_line.id)]
+        )
+        self.assertTrue(new_line, "should create a new contract line")
+        self.assertEqual(self.acct_line.state, 'permanently_suspended')
+        self.assertEqual(new_line.state, 'open')
+        self.assertEqual(
+            new_line.date_start,
+            to_date('2018-03-31'),
+            "New contract line error by wizard start : date_start",
         )
         self.assertEqual(
-            new_line.recurring_next_date,
-            to_date('2018-03-01'),
-            "New contract line error by wizard start : recurring_next_date",
+            new_line.date_end,
+            to_date('2019-01-31'),
+            "New contract line error by wizard start : date_end",
         )

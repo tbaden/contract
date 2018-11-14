@@ -86,9 +86,7 @@ class AccountAbstractAnalyticContractLine(models.AbstractModel):
     pricelist_id = fields.Many2one(
         comodel_name='product.pricelist', string='Pricelist'
     )
-    recurring_next_date = fields.Date(
-        string='Date of Next Invoice'
-    )
+    recurring_next_date = fields.Date(string='Date of Next Invoice')
 
     @api.depends(
         'automatic_price',
