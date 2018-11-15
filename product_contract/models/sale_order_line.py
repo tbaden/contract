@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2017 LasLabs Inc.
 # Copyright 2017 ACSONE SA/NV.
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
@@ -51,6 +50,13 @@ class SaleOrderLine(models.Model):
     date_start = fields.Date(string='Date Start')
     date_end = fields.Date(string='Date End', index=True)
 
+    contract_line_id = fields.Many2one(
+        comodel_name="account.analytic.invoice.line",
+        string="Contract Line",
+        required=False,
+        copy=False,
+    )
+
     @api.onchange('product_id')
     def onchange_product(self):
         if self.product_id.is_contract:
@@ -75,13 +81,12 @@ class SaleOrderLine(models.Model):
             'discount': self.discount,
             'date_end': self.date_end,
             'date_start': self.date_start or fields.Date.today(),
-            'recurring_next_date':
-                contract_line_env._compute_first_recurring_next_date(
-                    self.date_start or fields.Date.today(),
-                    self.recurring_invoicing_type,
-                    self.recurring_rule_type,
-                    self.recurring_interval,
-                ),
+            'recurring_next_date': contract_line_env._compute_first_recurring_next_date(
+                self.date_start or fields.Date.today(),
+                self.recurring_invoicing_type,
+                self.recurring_rule_type,
+                self.recurring_interval,
+            ),
             'recurring_interval': self.recurring_interval,
             'recurring_invoicing_type': self.recurring_invoicing_type,
             'recurring_rule_type': self.recurring_rule_type,
@@ -97,6 +102,7 @@ class SaleOrderLine(models.Model):
             contract_line |= contract_line_env.create(
                 rec._prepare_contract_line_values(contract)
             )
+            rec.contract_line_id.stop(rec.date_start)
         return contract_line
 
     @api.constrains('contract_id')
