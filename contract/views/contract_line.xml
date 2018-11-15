@@ -8,6 +8,11 @@
                ref="account_abstract_analytic_contract_line_view_form"/>
         <field name="mode">primary</field>
         <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <header>
+                    <field name="state" widget="statusbar"/>
+                </header>
+            </xpath>
             <xpath expr="//form" position="attributes">
                 <attribute name="string">Contract Line</attribute>
             </xpath>

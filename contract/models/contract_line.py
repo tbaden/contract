@@ -349,7 +349,7 @@ class AccountAnalyticInvoiceLine(models.Model):
         ).id
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Suspend contract line',
+            'name': 'Resiliate contract line',
             'res_model': 'account.analytic.invoice.line.wizard',
             'view_type': 'form',
             'view_mode': 'form',
