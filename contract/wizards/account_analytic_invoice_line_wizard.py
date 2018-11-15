@@ -20,7 +20,13 @@ class AccountAnalyticInvoiceLineWizard(models.TransientModel):
     @api.multi
     def stop(self):
         for wizard in self:
-            wizard.contract_line_id.stop(wizard.date_end)
+            date_end = (
+                wizard.contract_line_id.date_end
+                if wizard.contract_line_id.date_end
+                and wizard.date_end > wizard.contract_line_id.date_end
+                else wizard.date_end
+            )
+            wizard.contract_line_id.stop(date_end)
         return True
 
     @api.multi

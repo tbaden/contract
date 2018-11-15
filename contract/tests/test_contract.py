@@ -594,6 +594,16 @@ class TestContract(TestContractBase):
         self.assertEqual(self.acct_line.date_end, to_date('2018-01-01'))
         self.assertEqual(self.acct_line.state, 'close')
 
+    def test_stop_finished_contract_line(self):
+        """It should put end to the contract line"""
+        self.acct_line.date_end = '2017-12-01'
+        wizard = self._create_stop_wizard(
+            self.acct_line, to_date('2018-01-01')
+        )
+        wizard.stop()
+        self.assertEqual(self.acct_line.date_end, to_date('2017-12-01'))
+        self.assertEqual(self.acct_line.state, 'close')
+
     def test_start_contract_line(self):
         wizard_stop = self._create_stop_wizard(
             self.acct_line, to_date('2018-01-01')
