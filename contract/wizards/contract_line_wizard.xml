@@ -4,14 +4,14 @@
 
 <odoo>
 
-    <record model="ir.ui.view" id="account_analytic_invoice_line_wizard_stop_form_view">
-        <field name="name">account.analytic.invoice.line.stop.wizard.form (in contract)</field>
+    <record model="ir.ui.view" id="contract_line_wizard_stop_form_view">
+        <field name="name">contract.line.stop.wizard.form (in contract)</field>
         <field name="model">account.analytic.invoice.line.wizard</field>
         <field name="arch" type="xml">
             <form>
                 <group>
                     <field name="contract_line_id" invisible="True"/>
-                    <field name="date_end" required="True"/>
+                    <field string="Stop Date" name="date_end" required="True"/>
                 </group>
                 <footer>
                     <button name="stop"
@@ -26,18 +26,19 @@
         </field>
     </record>
 
-    <record model="ir.ui.view" id="account_analytic_invoice_line_wizard_start_form_view">
-        <field name="name">account.analytic.invoice.line.start.wizard.form (in contract)</field>
+    <record model="ir.ui.view" id="contract_line_wizard_plan_successor_form_view">
+        <field name="name">contract.line.plan_successor.wizard.form (in contract)</field>
         <field name="model">account.analytic.invoice.line.wizard</field>
         <field name="arch" type="xml">
             <form>
                 <group>
                     <field name="contract_line_id" invisible="True"/>
                     <field name="date_start" required="True"/>
-                    <field name="date_end"/>
+                    <field name="date_end" attrs="{'required': [('is_auto_renew', '=', True)]}"/>
+                    <field name="is_auto_renew"/>
                 </group>
                 <footer>
-                    <button name="start"
+                    <button name="plan_successor"
                             string="Validate"
                             class="btn-primary"
                             type="object"/>
@@ -49,18 +50,19 @@
         </field>
     </record>
 
-    <record model="ir.ui.view" id="account_analytic_invoice_line_wizard_pause_form_view">
-        <field name="name">account.analytic.invoice.line.start.wizard.form (in contract)</field>
+    <record model="ir.ui.view" id="contract_line_wizard_stop_plan_successor_form_view">
+        <field name="name">contract.line.stop_plan_successor.wizard.form (in contract)</field>
         <field name="model">account.analytic.invoice.line.wizard</field>
         <field name="arch" type="xml">
             <form>
                 <group>
                     <field name="contract_line_id" invisible="True"/>
-                    <field name="date_start" required="True"/>
-                    <field name="date_end"/>
+                    <field string="Suspension Start Date" name="date_start" required="True"/>
+                    <field string="Suspension End Date" name="date_end" required="True"/>
+                    <field name="is_auto_renew" invisible="1"/>
                 </group>
                 <footer>
-                    <button name="pause"
+                    <button name="stop_plan_successor"
                             string="Validate"
                             class="btn-primary"
                             type="object"/>
@@ -71,8 +73,5 @@
             </form>
         </field>
     </record>
-
-
-
 
 </odoo>
