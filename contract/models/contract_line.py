@@ -38,25 +38,108 @@ class AccountAnalyticInvoiceLine(models.Model):
         store=True,
         readonly=True,
     )
-    origin_id = fields.Many2one(
+    successor_contract_line_id = fields.Many2one(
         comodel_name='account.analytic.invoice.line',
-        string="Origin Contract Line",
+        string="Successor Contract Line",
+        required=False,
+        readonly=True,
+        copy=False,
+        help="Contract Line created by this one.",
+    )
+    predecessor_contract_line_id = fields.Many2one(
+        comodel_name='account.analytic.invoice.line',
+        string="Predecessor Contract Line",
         required=False,
         readonly=True,
         copy=False,
         help="Contract Line origin of this one.",
     )
-    state = fields.Selection(
-        string="State",
-        selection=[
-            ('open', 'Open'),
-            ('suspended', 'Suspended'),
-            ('permanently_suspended', 'Permanently Suspended'),
-            ('close', 'Closed'),
-        ],
-        default='open',
-        required=True,
+    is_start_allowed = fields.Boolean(
+        string="Start allowed?", compute='_compute_start_allowed'
     )
+    is_pause_allowed = fields.Boolean(
+        string="Pause allowed?", compute='_compute_pause_allowed'
+    )
+    is_stop_allowed = fields.Boolean(
+        string="Stop allowed?", compute='_compute_stop_allowed'
+    )
+
+    @api.multi
+    def _compute_start_allowed(self):
+        for rec in self:
+            rec.is_start_allowed = False
+            if (
+                rec.date_end
+                and not rec.successor_contract_line_id
+                and not rec.is_canceled
+            ):
+                rec.is_start_allowed = True
+
+    @api.multi
+    def _compute_pause_allowed(self):
+        today = fields.Date.today()
+        for rec in self:
+            rec.is_pause_allowed = False
+            if (
+                not rec.date_end
+                or (rec.date_end and today < rec.date_end)
+                and not rec.is_canceled
+            ):
+                rec.is_pause_allowed = True
+
+    @api.multi
+    def _compute_stop_allowed(self):
+        today = fields.Date.today()
+        for rec in self:
+            rec.is_stop_allowed = False
+            if (
+                rec.date_end
+                and today < rec.date_end
+                and rec.is_auto_renew
+                and not rec.successor_contract_line_id
+                and not rec.is_canceled
+            ):
+                rec.is_stop_allowed = True
+
+    @api.constrains('is_auto_renew', 'successor_contract_line_id', 'date_end')
+    def _check_auto_renew(self):
+        """
+            logical impossible combination:
+                * a line with is_auto_renew True should have date_end and
+                  couldn't have successor_contract_line_id
+                * a line without date_end can't have successor_contract_line_id
+
+        """
+        for rec in self:
+            if rec.is_auto_renew:
+                if rec.successor_contract_line_id:
+                    raise ValidationError(
+                        _(
+                            "A contract line with a successor "
+                            "can't be set to auto-renew"
+                        )
+                    )
+                if not rec.date_end:
+                    raise ValidationError(
+                        _("An auto-renew line should have a " "date end ")
+                    )
+            else:
+                if not rec.date_end and rec.successor_contract_line_id:
+                    raise ValidationError(
+                        _(
+                            "A contract line with a successor "
+                            "should have date end"
+                        )
+                    )
+
+    @api.constrains('successor_contract_line_id', 'date_end')
+    def _check_overlap_successor(self):
+        for rec in self:
+            if rec.date_end and rec.successor_contract_line_id:
+                if rec.date_end > rec.successor_contract_line_id.date_start:
+                    raise ValidationError(
+                        _("Contract line and its successor overlapped")
+                    )
 
     @api.model
     def _compute_first_recurring_next_date(
@@ -160,6 +243,7 @@ class AccountAnalyticInvoiceLine(models.Model):
             [
                 ('contract_id.recurring_invoices', '=', True),
                 ('recurring_next_date', '<=', date_ref),
+                ('is_canceled', '=', False),
                 '|',
                 ('date_end', '=', False),
                 ('date_end', '>=', date_ref),
@@ -268,10 +352,9 @@ class AccountAnalyticInvoiceLine(models.Model):
 
     @api.multi
     def stop(self, date_end):
-        stop_states = ['open', 'suspended']
-        if [x for x in self.mapped('state') if x not in stop_states]:
-            raise ValidationError(_("Can't start a line at this state"))
-        return self.write({'date_end': date_end, 'state': 'close'})
+        if not all(self.mapped('is_stop_allowed')):
+            raise ValidationError(_('Stop not allowed for this line'))
+        return self.write({'date_end': date_end, 'is_auto_renew': False})
 
     @api.multi
     def _prepare_value_for_start(
@@ -289,33 +372,39 @@ class AccountAnalyticInvoiceLine(models.Model):
         new_vals.pop("id", None)
         values = self._convert_to_write(new_vals)
         values['date_start'] = date_start
-        values['state'] = 'open'
         values['date_end'] = date_end
         values['recurring_next_date'] = recurring_next_date
-        values['origin_id'] = self.id
+        values['predecessor_contract_line_id'] = self.id
         return values
 
     @api.multi
     def start(self, date_start, date_end, recurring_next_date=False):
-        start_states = ['suspended', 'close']
         contract_line = self.env['account.analytic.invoice.line']
         for rec in self:
-            if rec.state not in start_states:
-                raise ValidationError(_("Can't start a line at this state"))
-            contract_line |= self.create(
+            if not rec.is_start_allowed:
+                raise ValidationError(_('Start not allowed for this line'))
+            new_line = self.create(
                 rec._prepare_value_for_start(
                     date_start, date_end, recurring_next_date
                 )
             )
-        self.write({'state': 'permanently_suspended'})
+            rec.successor_contract_line_id = new_line
+            contract_line |= new_line
         return contract_line
 
     @api.multi
     def pause(self, date_end):
-        pause_states = ['open']
-        if self.mapped('state') != pause_states:
-            raise ValidationError(_("Can't pause a line at this state"))
-        return self.write({'date_end': date_end, 'state': 'suspended'})
+        if not all(self.mapped('is_pause_allowed')):
+            raise ValidationError(_('Pause not allowed for this line'))
+        return self.write({'date_end': date_end})
+
+    @api.multi
+    def cancel(self):
+        return self.write({'is_canceled': True})
+
+    @api.multi
+    def uncancel(self):
+        return self.write({'is_canceled': False})
 
     @api.multi
     def action_start(self):
@@ -361,7 +450,10 @@ class AccountAnalyticInvoiceLine(models.Model):
     @api.multi
     def action_pause(self):
         self.ensure_one()
-        context = {'default_contract_line_id': self.id}
+        context = {
+            'default_contract_line_id': self.id,
+            'default_date_end': self.date_end,
+        }
         context.update(self.env.context)
         view_id = self.env.ref(
             'contract.account_analytic_invoice_line_wizard_pause_form_view'
@@ -376,3 +468,43 @@ class AccountAnalyticInvoiceLine(models.Model):
             'target': 'new',
             'context': context,
         }
+
+    @api.multi
+    def _get_renewal_dates(self):
+        self.ensure_one()
+        date_start = self.date_end
+        date_end = date_start + self.get_relative_delta(
+            self.auto_renew_rule_type, self.auto_renew_interval
+        )
+        return date_start, date_end
+
+    @api.multi
+    def renew(self):
+        res = self.env['account.analytic.invoice.line']
+        for rec in self:
+            is_auto_renew = rec.is_auto_renew
+            rec.stop(rec.date_end)
+            date_start, date_end = rec._get_renewal_dates()
+            new_line = rec.start(date_start, date_end, date_start)
+            new_line._onchange_date_start()
+            new_line.is_auto_renew = is_auto_renew
+            res |= new_line
+        return res
+
+    @api.model
+    def _search_contract_line_to_renew(self):
+        date_ref = fields.datetime.today() + self.get_relative_delta(
+            self.termination_notice_rule_type, self.termination_notice_interval
+        )
+        return self.search(
+            [
+                ('is_auto_renew', '=', True),
+                ('date_end', '<=', date_ref),
+                ('is_canceled', '=', False),
+            ]
+        )
+
+    @api.model
+    def cron_renew_contract_line(self):
+        to_renew = self._search_contract_line_to_renew()
+        to_renew.renew()

@@ -11,7 +11,7 @@
             <form>
                 <group>
                     <field name="contract_line_id" invisible="True"/>
-                    <field name="date_end" required="True"/>
+                    <field string="Stop Date" name="date_end" required="True"/>
                 </group>
                 <footer>
                     <button name="stop"
@@ -56,9 +56,7 @@
             <form>
                 <group>
                     <field name="contract_line_id" invisible="True"/>
-                    <field name="date_start" required="True"/>
-                    <field name="date_end"/>
-                </group>
+                    <field string=" Date" name="date_end" required="True"/>                </group>
                 <footer>
                     <button name="pause"
                             string="Validate"
@@ -71,8 +69,5 @@
             </form>
         </field>
     </record>
-
-
-
 
 </odoo>
