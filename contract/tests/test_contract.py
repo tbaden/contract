@@ -549,6 +549,20 @@ class TestContract(TestContractBase):
             fields.Date.today() + relativedelta(months=5),
         )
 
+    def test_stop_past_contract_line(self):
+        """Past contract line are ignored on stop"""
+        self.acct_line.write(
+            {
+                'date_end': fields.Date.today() + relativedelta(months=5),
+                'is_auto_renew': True,
+            }
+        )
+        self.acct_line.stop(fields.Date.today() + relativedelta(months=7))
+        self.assertEqual(
+            self.acct_line.date_end,
+            fields.Date.today() + relativedelta(months=5),
+        )
+
     def test_stop_plan_successor_wizard(self):
         self.acct_line.write(
             {
