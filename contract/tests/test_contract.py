@@ -549,6 +549,24 @@ class TestContract(TestContractBase):
             fields.Date.today() + relativedelta(months=5),
         )
 
+    def test_stop_upcoming_contract_line(self):
+        """It should put end to the contract line"""
+        self.acct_line.write(
+            {
+                'date_start': fields.Date.today() + relativedelta(months=3),
+                'recurring_next_date': fields.Date.today()
+                + relativedelta(months=3),
+                'date_end': fields.Date.today() + relativedelta(months=7),
+                'is_auto_renew': True,
+            }
+        )
+        self.acct_line.stop(fields.Date.today())
+        self.assertEqual(
+            self.acct_line.date_end,
+            fields.Date.today() + relativedelta(months=7),
+        )
+        self.assertTrue(self.acct_line.is_canceled)
+
     def test_stop_past_contract_line(self):
         """Past contract line are ignored on stop"""
         self.acct_line.write(
@@ -565,12 +583,7 @@ class TestContract(TestContractBase):
 
     def test_stop_contract_line_without_date_end(self):
         """Past contract line are ignored on stop"""
-        self.acct_line.write(
-            {
-                'date_end': False,
-                'is_auto_renew': False,
-            }
-        )
+        self.acct_line.write({'date_end': False, 'is_auto_renew': False})
         self.acct_line.stop(fields.Date.today() + relativedelta(months=7))
         self.assertEqual(
             self.acct_line.date_end,
@@ -741,12 +754,10 @@ class TestContract(TestContractBase):
             suspension_start, suspension_end, True
         )
         self.assertEqual(
-            self.acct_line.date_start,
-            start_date + (suspension_end - end_date),
+            self.acct_line.date_start, start_date + (suspension_end - end_date)
         )
         self.assertEqual(
-            self.acct_line.date_end,
-            end_date + (suspension_end - end_date),
+            self.acct_line.date_end, end_date + (suspension_end - end_date)
         )
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
@@ -778,8 +789,7 @@ class TestContract(TestContractBase):
             start_date + (suspension_end - start_date),
         )
         self.assertEqual(
-            self.acct_line.date_end,
-            end_date + (suspension_end - start_date),
+            self.acct_line.date_end, end_date + (suspension_end - start_date)
         )
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
@@ -811,9 +821,7 @@ class TestContract(TestContractBase):
             self.acct_line.date_start,
             start_date + (suspension_end - start_date),
         )
-        self.assertFalse(
-            self.acct_line.date_end,
-        )
+        self.assertFalse(self.acct_line.date_end)
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
         )
@@ -877,8 +885,7 @@ class TestContract(TestContractBase):
             self.acct_line.date_start,
             start_date + (suspension_end - suspension_start),
         )
-        self.assertFalse(
-            self.acct_line.date_end)
+        self.assertFalse(self.acct_line.date_end)
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
         )
