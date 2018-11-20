@@ -389,6 +389,12 @@ class AccountAnalyticInvoiceLine(models.Model):
     def stop(self, date_end):
         if not all(self.mapped('is_stop_allowed')):
             raise ValidationError(_('Stop not allowed for this line'))
+        for rec in self:
+            date_end = (
+                rec.date_end
+                if rec.date_end and rec.date_end < date_end
+                else date_end
+            )
         return self.write({'date_end': date_end, 'is_auto_renew': False})
 
     @api.multi
