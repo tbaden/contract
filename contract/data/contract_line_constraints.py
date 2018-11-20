@@ -21,7 +21,7 @@ CRITERIA_ALLOWED_DICT = {
         HAS_SUCCESSOR=False,
         CANCELED=False,
     ): ALLOWED(
-        PLAN_SUCCESSOR=True,
+        PLAN_SUCCESSOR=False,
         STOP_PLAN_SUCCESSOR=True,
         STOP=True,
         CANCEL=True,
@@ -36,8 +36,8 @@ CRITERIA_ALLOWED_DICT = {
     ): ALLOWED(
         PLAN_SUCCESSOR=False,
         STOP_PLAN_SUCCESSOR=False,
-        STOP=False,
-        CANCEL=False,
+        STOP=True,
+        CANCEL=True,
         UN_CANCEL=False,
     ),
     CRITERIA(
@@ -73,7 +73,7 @@ CRITERIA_ALLOWED_DICT = {
         HAS_SUCCESSOR=False,
         CANCELED=False,
     ): ALLOWED(
-        PLAN_SUCCESSOR=True,
+        PLAN_SUCCESSOR=False,
         STOP_PLAN_SUCCESSOR=True,
         STOP=True,
         CANCEL=True,
@@ -88,8 +88,8 @@ CRITERIA_ALLOWED_DICT = {
     ): ALLOWED(
         PLAN_SUCCESSOR=False,
         STOP_PLAN_SUCCESSOR=False,
-        STOP=False,
-        CANCEL=False,
+        STOP=True,
+        CANCEL=True,
         UN_CANCEL=False,
     ),
     CRITERIA(
@@ -125,7 +125,7 @@ CRITERIA_ALLOWED_DICT = {
         HAS_SUCCESSOR=False,
         CANCELED=False,
     ): ALLOWED(
-        PLAN_SUCCESSOR=True,
+        PLAN_SUCCESSOR=False,
         STOP_PLAN_SUCCESSOR=False,
         STOP=False,
         CANCEL=False,

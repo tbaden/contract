@@ -386,7 +386,35 @@ class AccountAnalyticInvoiceLine(models.Model):
             return relativedelta(years=interval)
 
     @api.multi
+    def delay(self, delay_delta):
+        """
+        Delay a contract line
+        :param delay_delta: delay relative delta
+        :return: delayed contract line
+        """
+        for rec in self:
+            new_date_start = rec.date_start + delay_delta
+            rec.recurring_next_date = self._compute_first_recurring_next_date(
+                new_date_start,
+                rec.recurring_invoicing_type,
+                rec.recurring_rule_type,
+                rec.recurring_interval,
+            )
+            rec.date_end = (
+                rec.date_end
+                if not rec.date_end
+                else rec.date_end + delay_delta
+            )
+            rec.date_start = new_date_start
+
+    @api.multi
     def stop(self, date_end):
+        """
+        Put date_end on contract line
+        We don't consider contract lines that end's before the new end date
+        :param date_end: new date end for contract line
+        :return: True
+        """
         if not all(self.mapped('is_stop_allowed')):
             raise ValidationError(_('Stop not allowed for this line'))
         for rec in self:
@@ -395,7 +423,8 @@ class AccountAnalyticInvoiceLine(models.Model):
                 if rec.date_end and rec.date_end < date_end
                 else date_end
             )
-        return self.write({'date_end': date_end, 'is_auto_renew': False})
+            rec.write({'date_end': date_end, 'is_auto_renew': False})
+        return True
 
     @api.multi
     def _prepare_value_for_plan_successor(
@@ -423,6 +452,15 @@ class AccountAnalyticInvoiceLine(models.Model):
     def plan_successor(
         self, date_start, date_end, is_auto_renew, recurring_next_date=False
     ):
+        """
+        Create a copy of a contract line in a new interval
+        :param date_start: date_start for the successor_contract_line
+        :param date_end: date_end for the successor_contract_line
+        :param is_auto_renew: is_auto_renew option for successor_contract_line
+        :param recurring_next_date: recurring_next_date for the
+        successor_contract_line
+        :return: successor_contract_line
+        """
         contract_line = self.env['account.analytic.invoice.line']
         for rec in self:
             if not rec.is_plan_successor_allowed:
@@ -441,20 +479,78 @@ class AccountAnalyticInvoiceLine(models.Model):
 
     @api.multi
     def stop_plan_successor(self, date_start, date_end, is_auto_renew):
+        """
+        Stop a contract line for a defined period and start it later
+        Cases to consider:
+            * contract line end's before the suspension period:
+                -> apply stop
+            * contract line start before the suspension period and end in it
+                -> apply stop at suspension start date
+                -> apply plan successor:
+                    - date_start: suspension.date_end
+                    - date_end: suspension.date_end + (contract_line.date_end
+                                                    - suspension.date_start)
+            * contract line start before the suspension period and end after it
+                -> apply stop at suspension start date
+                -> apply plan successor:
+                    - date_start: suspension.date_end
+                    - date_end: suspension.date_end + (suspension.date_end
+                                                    - suspension.date_start)
+            * contract line start and end's in the suspension period
+                -> apply delay
+                    - delay: suspension.date_end - contract_line.end_date
+            * contract line start in the suspension period and end after it
+                -> apply delay
+                    - delay: suspension.date_end - contract_line.date_start
+            * contract line start  and end after the suspension period
+                -> apply delay
+                    - delay: suspension.date_end - suspension.start_date
+        :param date_start: suspension start date
+        :param date_end: suspension end date
+        :param is_auto_renew: is the new line is set to auto_renew
+        :return: created contract line
+        """
         if not all(self.mapped('is_stop_plan_successor_allowed')):
             raise ValidationError(
                 _('Stop/Plan successor not allowed for this line')
             )
+        contract_line = self.env['account.analytic.invoice.line']
         for rec in self:
-            new_date_start = date_end
-            new_date_end = (
-                rec.date_end
-                if not rec.date_end
-                else rec.date_end + (date_end - date_start)
-            )
-            rec.stop(date_start)
-            rec.plan_successor(new_date_start, new_date_end, is_auto_renew)
-        return True
+            if rec.date_start >= date_start:
+                if rec.date_end and rec.date_end <= date_end:
+                    delay = date_end - rec.date_end
+                elif (
+                    rec.date_end
+                    and rec.date_end > date_end
+                    or not rec.date_end
+                ) and rec.date_start <= date_end:
+                    delay = date_end - rec.date_start
+                else:
+                    delay = date_end - date_start
+                rec.delay(delay)
+            else:
+                if rec.date_end and rec.date_end < date_start:
+                    rec.stop(date_start)
+                elif (
+                    rec.date_end
+                    and rec.date_end > date_start
+                    and rec.date_end < date_end
+                ):
+                    new_date_start = date_end
+                    new_date_end = new_date_start + (rec.date_end - date_start)
+                    rec.stop(date_start)
+                    contract_line |= rec.plan_successor(
+                        new_date_start, new_date_end, is_auto_renew
+                    )
+                else:
+                    new_date_start = date_end
+                    new_date_end = rec.date_end if not rec.date_end else new_date_start + (date_end - date_start)
+                    rec.stop(date_start)
+                    contract_line |= rec.plan_successor(
+                        new_date_start, new_date_end, is_auto_renew
+                    )
+
+        return contract_line
 
     @api.multi
     def cancel(self):

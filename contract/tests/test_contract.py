@@ -563,6 +563,20 @@ class TestContract(TestContractBase):
             fields.Date.today() + relativedelta(months=5),
         )
 
+    def test_stop_contract_line_without_date_end(self):
+        """Past contract line are ignored on stop"""
+        self.acct_line.write(
+            {
+                'date_end': False,
+                'is_auto_renew': False,
+            }
+        )
+        self.acct_line.stop(fields.Date.today() + relativedelta(months=7))
+        self.assertEqual(
+            self.acct_line.date_end,
+            fields.Date.today() + relativedelta(months=7),
+        )
+
     def test_stop_plan_successor_wizard(self):
         self.acct_line.write(
             {
@@ -585,109 +599,324 @@ class TestContract(TestContractBase):
         )
         self.assertFalse(self.acct_line.is_auto_renew)
 
-    def test_stop_plan_successor_contract_line(self):
-        """It should put end to the contract line"""
+    def test_stop_plan_successor_contract_line_1(self):
+        """
+        * contract line end's before the suspension period:
+                -> apply stop
+        """
+        suspension_start = fields.Date.today() + relativedelta(months=5)
+        suspension_end = fields.Date.today() + relativedelta(months=6)
+        start_date = fields.Date.today()
+        end_date = fields.Date.today() + relativedelta(months=4)
         self.acct_line.write(
             {
-                'date_start': fields.Date.today() - relativedelta(years=1),
-                'recurring_next_date': fields.Date.today()
-                - relativedelta(years=1),
-                'date_end': fields.Date.today() - relativedelta(months=1),
-            }
-        )
-        with self.assertRaises(ValidationError):
-            self.acct_line.stop_plan_successor(
-                fields.Date.today(),
-                fields.Date.today() + relativedelta(months=1),
-                False,
-            )
-        self.acct_line.write(
-            {
-                'date_start': fields.Date.today() - relativedelta(months=1),
-                'recurring_next_date': fields.Date.today()
-                - relativedelta(months=1),
-                'date_end': fields.Date.today() + relativedelta(years=1),
+                'date_start': start_date,
+                'recurring_next_date': start_date,
+                'date_end': end_date,
             }
         )
         self.acct_line.stop_plan_successor(
-            fields.Date.today() + relativedelta(months=1),
-            fields.Date.today() + relativedelta(months=2),
-            True,
+            suspension_start, suspension_end, True
+        )
+        self.assertEqual(self.acct_line.date_end, end_date)
+        new_line = self.env['account.analytic.invoice.line'].search(
+            [('predecessor_contract_line_id', '=', self.acct_line.id)]
+        )
+        self.assertFalse(new_line)
+
+    def test_stop_plan_successor_contract_line_2(self):
+        """
+        * contract line start before the suspension period and end in it
+                -> apply stop at suspension start date
+                -> apply plan successor:
+                    - date_start: suspension.date_end
+                    - date_end: suspension.date_end + (contract_line.date_end
+                                                    - suspension.date_start)
+        """
+        suspension_start = fields.Date.today() + relativedelta(months=3)
+        suspension_end = fields.Date.today() + relativedelta(months=5)
+        start_date = fields.Date.today()
+        end_date = fields.Date.today() + relativedelta(months=4)
+        self.acct_line.write(
+            {
+                'date_start': start_date,
+                'recurring_next_date': start_date,
+                'date_end': end_date,
+            }
+        )
+        self.acct_line.stop_plan_successor(
+            suspension_start, suspension_end, True
+        )
+        self.assertEqual(self.acct_line.date_end, suspension_start)
+        new_line = self.env['account.analytic.invoice.line'].search(
+            [('predecessor_contract_line_id', '=', self.acct_line.id)]
+        )
+        self.assertTrue(new_line)
+        new_date_end = suspension_end + (end_date - suspension_start)
+        self.assertEqual(new_line.date_start, suspension_end)
+        self.assertEqual(new_line.date_end, new_date_end)
+
+    def test_stop_plan_successor_contract_line_3(self):
+        """
+        * contract line start before the suspension period and end after it
+                -> apply stop at suspension start date
+                -> apply plan successor:
+                    - date_start: suspension.date_end
+                    - date_end: suspension.date_end + (suspension.date_end
+                                                    - suspension.date_start)
+        """
+        suspension_start = fields.Date.today() + relativedelta(months=3)
+        suspension_end = fields.Date.today() + relativedelta(months=5)
+        start_date = fields.Date.today()
+        end_date = fields.Date.today() + relativedelta(months=6)
+        self.acct_line.write(
+            {
+                'date_start': start_date,
+                'recurring_next_date': start_date,
+                'date_end': end_date,
+            }
+        )
+        self.acct_line.stop_plan_successor(
+            suspension_start, suspension_end, True
+        )
+        self.assertEqual(self.acct_line.date_end, suspension_start)
+        new_line = self.env['account.analytic.invoice.line'].search(
+            [('predecessor_contract_line_id', '=', self.acct_line.id)]
+        )
+        self.assertTrue(new_line)
+        new_date_end = suspension_end + (suspension_end - suspension_start)
+        self.assertEqual(new_line.date_start, suspension_end)
+        self.assertEqual(new_line.date_end, new_date_end)
+
+    def test_stop_plan_successor_contract_line_3_without_end_date(self):
+        """
+        * contract line start before the suspension period and end after it
+                -> apply stop at suspension start date
+                -> apply plan successor:
+                    - date_start: suspension.date_end
+                    - date_end: suspension.date_end + (suspension.date_end
+                                                    - suspension.date_start)
+        """
+        suspension_start = fields.Date.today() + relativedelta(months=3)
+        suspension_end = fields.Date.today() + relativedelta(months=5)
+        start_date = fields.Date.today()
+        end_date = False
+        self.acct_line.write(
+            {
+                'date_start': start_date,
+                'recurring_next_date': start_date,
+                'date_end': end_date,
+                'is_auto_renew': False,
+            }
+        )
+        self.acct_line.stop_plan_successor(
+            suspension_start, suspension_end, False
+        )
+        self.assertEqual(self.acct_line.date_end, suspension_start)
+        new_line = self.env['account.analytic.invoice.line'].search(
+            [('predecessor_contract_line_id', '=', self.acct_line.id)]
+        )
+        self.assertTrue(new_line)
+        self.assertEqual(new_line.date_start, suspension_end)
+        self.assertFalse(new_line.date_end)
+
+    def test_stop_plan_successor_contract_line_4(self):
+        """
+        * contract line start and end's in the suspension period
+                -> apply delay
+                    - delay: suspension.date_end - contract_line.end_date
+        """
+        suspension_start = fields.Date.today() + relativedelta(months=2)
+        suspension_end = fields.Date.today() + relativedelta(months=5)
+        start_date = fields.Date.today() + relativedelta(months=3)
+        end_date = fields.Date.today() + relativedelta(months=4)
+        self.acct_line.write(
+            {
+                'date_start': start_date,
+                'recurring_next_date': start_date,
+                'date_end': end_date,
+            }
+        )
+        self.acct_line.stop_plan_successor(
+            suspension_start, suspension_end, True
+        )
+        self.assertEqual(
+            self.acct_line.date_start,
+            start_date + (suspension_end - end_date),
         )
         self.assertEqual(
             self.acct_line.date_end,
-            fields.Date.today() + relativedelta(months=1),
+            end_date + (suspension_end - end_date),
         )
-        self.assertFalse(self.acct_line.is_auto_renew)
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
         )
-        self.assertTrue(new_line, "should create a new contract line")
-        self.assertTrue(new_line.is_auto_renew)
-        self.assertEqual(
-            new_line.date_start, fields.Date.today() + relativedelta(months=2)
-        )
-        self.assertEqual(
-            new_line.date_end,
-            fields.Date.today()
-            + relativedelta(years=1)
-            + (
-                (fields.Date.today() + relativedelta(months=2))
-                - (fields.Date.today() + relativedelta(months=1))
-            ),
-        )
+        self.assertFalse(new_line)
 
-    def test_stop_plan_successor_contract_line_without_date_end(self):
+    def test_stop_plan_successor_contract_line_5(self):
+        """
+        * contract line start in the suspension period and end after it
+                -> apply delay
+                    - delay: suspension.date_end - contract_line.date_start
+        """
+        suspension_start = fields.Date.today() + relativedelta(months=2)
+        suspension_end = fields.Date.today() + relativedelta(months=5)
+        start_date = fields.Date.today() + relativedelta(months=3)
+        end_date = fields.Date.today() + relativedelta(months=6)
         self.acct_line.write(
             {
-                'date_start': '2016-01-01',
-                'recurring_next_date': '2016-01-01',
-                'date_end': False,
+                'date_start': start_date,
+                'recurring_next_date': start_date,
+                'date_end': end_date,
+            }
+        )
+        self.acct_line.stop_plan_successor(
+            suspension_start, suspension_end, True
+        )
+        self.assertEqual(
+            self.acct_line.date_start,
+            start_date + (suspension_end - start_date),
+        )
+        self.assertEqual(
+            self.acct_line.date_end,
+            end_date + (suspension_end - start_date),
+        )
+        new_line = self.env['account.analytic.invoice.line'].search(
+            [('predecessor_contract_line_id', '=', self.acct_line.id)]
+        )
+        self.assertFalse(new_line)
+
+    def test_stop_plan_successor_contract_line_5_without_date_end(self):
+        """
+        * contract line start in the suspension period and end after it
+                -> apply delay
+                    - delay: suspension.date_end - contract_line.date_start
+        """
+        suspension_start = fields.Date.today() + relativedelta(months=2)
+        suspension_end = fields.Date.today() + relativedelta(months=5)
+        start_date = fields.Date.today() + relativedelta(months=3)
+        end_date = False
+        self.acct_line.write(
+            {
+                'date_start': start_date,
+                'recurring_next_date': start_date,
+                'date_end': end_date,
                 'is_auto_renew': False,
             }
         )
         self.acct_line.stop_plan_successor(
-            fields.Date.today(),
-            fields.Date.today() + relativedelta(months=1),
-            False,
+            suspension_start, suspension_end, True
+        )
+        self.assertEqual(
+            self.acct_line.date_start,
+            start_date + (suspension_end - start_date),
+        )
+        self.assertFalse(
+            self.acct_line.date_end,
         )
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
         )
-        self.assertEqual(self.acct_line.date_end, fields.Date.today())
-        self.assertEqual(
-            new_line.date_start, fields.Date.today() + relativedelta(months=1)
-        )
-        self.assertFalse(new_line.date_end)
+        self.assertFalse(new_line)
 
-    def test_stop_plan_successor_wizard(self):
+    def test_stop_plan_successor_contract_line_6(self):
+        """
+        * contract line start  and end after the suspension period
+                -> apply delay
+                    - delay: suspension.date_end - suspension.start_date
+        """
+        suspension_start = fields.Date.today() + relativedelta(months=2)
+        suspension_end = fields.Date.today() + relativedelta(months=3)
+        start_date = fields.Date.today() + relativedelta(months=4)
+        end_date = fields.Date.today() + relativedelta(months=6)
         self.acct_line.write(
             {
-                'date_start': fields.Date.today(),
-                'recurring_next_date': fields.Date.today(),
-                'date_end': False,
+                'date_start': start_date,
+                'recurring_next_date': start_date,
+                'date_end': end_date,
+            }
+        )
+        self.acct_line.stop_plan_successor(
+            suspension_start, suspension_end, True
+        )
+        self.assertEqual(
+            self.acct_line.date_start,
+            start_date + (suspension_end - suspension_start),
+        )
+        self.assertEqual(
+            self.acct_line.date_end,
+            end_date + (suspension_end - suspension_start),
+        )
+        new_line = self.env['account.analytic.invoice.line'].search(
+            [('predecessor_contract_line_id', '=', self.acct_line.id)]
+        )
+        self.assertFalse(new_line)
+
+    def test_stop_plan_successor_contract_line_6_without_date_end(self):
+        """
+        * contract line start  and end after the suspension period
+                -> apply delay
+                    - delay: suspension.date_end - suspension.start_date
+        """
+        suspension_start = fields.Date.today() + relativedelta(months=2)
+        suspension_end = fields.Date.today() + relativedelta(months=3)
+        start_date = fields.Date.today() + relativedelta(months=4)
+        end_date = False
+        self.acct_line.write(
+            {
+                'date_start': start_date,
+                'recurring_next_date': start_date,
+                'date_end': end_date,
                 'is_auto_renew': False,
+            }
+        )
+        self.acct_line.stop_plan_successor(
+            suspension_start, suspension_end, True
+        )
+        self.assertEqual(
+            self.acct_line.date_start,
+            start_date + (suspension_end - suspension_start),
+        )
+        self.assertFalse(
+            self.acct_line.date_end)
+        new_line = self.env['account.analytic.invoice.line'].search(
+            [('predecessor_contract_line_id', '=', self.acct_line.id)]
+        )
+        self.assertFalse(new_line)
+
+    def test_stop_plan_successor_wizard(self):
+        suspension_start = fields.Date.today() + relativedelta(months=2)
+        suspension_end = fields.Date.today() + relativedelta(months=3)
+        start_date = fields.Date.today() + relativedelta(months=4)
+        end_date = fields.Date.today() + relativedelta(months=6)
+        self.acct_line.write(
+            {
+                'date_start': start_date,
+                'recurring_next_date': start_date,
+                'date_end': end_date,
             }
         )
         wizard = self.env['account.analytic.invoice.line.wizard'].create(
             {
-                'date_start': fields.Date.today() + relativedelta(months=3),
-                'date_end': fields.Date.today() + relativedelta(months=5),
+                'date_start': suspension_start,
+                'date_end': suspension_end,
                 'is_auto_renew': False,
                 'contract_line_id': self.acct_line.id,
             }
         )
         wizard.stop_plan_successor()
+        self.assertEqual(
+            self.acct_line.date_start,
+            start_date + (suspension_end - suspension_start),
+        )
+        self.assertEqual(
+            self.acct_line.date_end,
+            end_date + (suspension_end - suspension_start),
+        )
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
         )
-        self.assertFalse(self.acct_line.is_auto_renew)
-        self.assertFalse(new_line.is_auto_renew)
-        self.assertTrue(new_line, "should create a new contract line")
-        self.assertEqual(
-            new_line.date_start, fields.Date.today() + relativedelta(months=5)
-        )
-        self.assertFalse(new_line.date_end)
+        self.assertFalse(new_line)
 
     def test_plan_successor_contract_line(self):
         self.acct_line.write(
