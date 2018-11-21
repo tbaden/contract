@@ -165,6 +165,15 @@ class AccountAnalyticInvoiceLine(models.Model):
                         _("Contract line and its successor overlapped")
                     )
 
+    @api.constrains('predecessor_contract_line_id', 'date_start')
+    def _check_overlap_predecessor(self):
+        for rec in self:
+            if rec.predecessor_contract_line_id:
+                if rec.date_start < rec.predecessor_contract_line_id.date_end:
+                    raise ValidationError(
+                        _("Contract line and its predecessor overlapped")
+                    )
+
     @api.model
     def _compute_first_recurring_next_date(
         self,
@@ -422,7 +431,7 @@ class AccountAnalyticInvoiceLine(models.Model):
                     new_date_end=rec.date_end,
                 )
             )
-            rec.contract_id.message_post(msg)
+            rec.contract_id.message_post(body=msg)
 
     @api.multi
     def stop(self, date_end):
@@ -456,7 +465,7 @@ class AccountAnalyticInvoiceLine(models.Model):
                         new_date_end=rec.date_end,
                     )
                 )
-                rec.contract_id.message_post(msg)
+                rec.contract_id.message_post(body=msg)
         return True
 
     @api.multi
@@ -521,7 +530,7 @@ class AccountAnalyticInvoiceLine(models.Model):
                     new_date_end=new_line.date_end,
                 )
             )
-            rec.contract_id.message_post(msg)
+            rec.contract_id.message_post(body=msg)
         return contract_line
 
     @api.multi
@@ -611,16 +620,33 @@ class AccountAnalyticInvoiceLine(models.Model):
         for contract in self.mapped('contract_id'):
             lines = self.filtered(lambda l, c=contract: l.contract_id == c)
             msg = _(
-                """Contract line un-canceled: %s"""
-                % "<br/>- ".join(lines.mapped('name'))
+                """Contract line canceled: %s"""
+                % "<br/>- ".join(
+                    [
+                        "<strong>%s</strong>" % name
+                        for name in lines.mapped('name')
+                    ]
+                )
             )
-            contract.message_post(msg)
+            contract.message_post(body=msg)
         return self.write({'is_canceled': True})
 
     @api.multi
     def uncancel(self, recurring_next_date):
         if not all(self.mapped('is_un_cancel_allowed')):
             raise ValidationError(_('Un-cancel not allowed for this line'))
+        for contract in self.mapped('contract_id'):
+            lines = self.filtered(lambda l, c=contract: l.contract_id == c)
+            msg = _(
+                """Contract line Un-canceled: %s"""
+                % "<br/>- ".join(
+                    [
+                        "<strong>%s</strong>" % name
+                        for name in lines.mapped('name')
+                    ]
+                )
+            )
+            contract.message_post(body=msg)
         return self.write(
             {'is_canceled': False, 'recurring_next_date': recurring_next_date}
         )
@@ -729,26 +755,24 @@ class AccountAnalyticInvoiceLine(models.Model):
             is_auto_renew = rec.is_auto_renew
             rec.stop(rec.date_end)
             date_start, date_end = rec._get_renewal_dates()
-            new_line = rec.plan_successor(date_start, date_end, date_start)
+            new_line = rec.plan_successor(date_start, date_end, is_auto_renew)
             new_line._onchange_date_start()
-            new_line.is_auto_renew = is_auto_renew
             res |= new_line
         return res
 
     @api.model
-    def _search_contract_line_to_renew(self):
+    def _contract_line_to_renew_domain(self):
         date_ref = fields.datetime.today() + self.get_relative_delta(
             self.termination_notice_rule_type, self.termination_notice_interval
         )
-        return self.search(
-            [
-                ('is_auto_renew', '=', True),
-                ('date_end', '<=', date_ref),
-                ('is_canceled', '=', False),
-            ]
-        )
+        return [
+            ('is_auto_renew', '=', True),
+            ('date_end', '<=', date_ref),
+            ('is_canceled', '=', False),
+        ]
 
     @api.model
     def cron_renew_contract_line(self):
-        to_renew = self._search_contract_line_to_renew()
+        domain = self._contract_line_to_renew_domain()
+        to_renew = self.search(domain)
         to_renew.renew()

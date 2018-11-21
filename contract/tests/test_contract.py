@@ -952,10 +952,28 @@ class TestContract(TestContractBase):
             new_line.date_end, fields.Date.today() + relativedelta(months=7)
         )
 
-    def test_plan_successor_with_overlap(self):
+    def test_overlap(self):
+        self.acct_line.write(
+            {
+                'date_start': fields.Date.today(),
+                'recurring_next_date': fields.Date.today(),
+                'date_end': fields.Date.today() + relativedelta(months=3),
+                'is_auto_renew': False,
+            }
+        )
+        self.acct_line.plan_successor(
+            fields.Date.today() + relativedelta(months=5),
+            fields.Date.today() + relativedelta(months=7),
+            True,
+        )
+        new_line = self.env['account.analytic.invoice.line'].search(
+            [('predecessor_contract_line_id', '=', self.acct_line.id)]
+        )
         with self.assertRaises(ValidationError):
-            self.acct_line.plan_successor(
-                to_date('2016-02-01'), to_date('2016-09-01'), False
+            new_line.date_start = fields.Date.today() + relativedelta(months=2)
+        with self.assertRaises(ValidationError):
+            self.acct_line.date_end = fields.Date.today() + relativedelta(
+                months=6
             )
 
     def test_plan_successor_wizard(self):
@@ -1026,7 +1044,7 @@ class TestContract(TestContractBase):
         self.acct_line.copy(
             {'date_end': fields.Date.today() + relativedelta(months=2)}
         )
-        to_renew = self.acct_line._search_contract_line_to_renew()
+        to_renew = self.acct_line.search(self.acct_line._contract_line_to_renew_domain())
         self.assertEqual(
             set(to_renew), set((self.acct_line, line_1, line_2, line_3))
         )
