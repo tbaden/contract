@@ -491,14 +491,14 @@ class AccountAnalyticInvoiceLine(models.Model):
                 -> apply stop at suspension start date
                 -> apply plan successor:
                     - date_start: suspension.date_end
-                    - date_end: suspension.date_end + (contract_line.date_end
-                                                    - suspension.date_start)
+                    - date_end: date_end    + (contract_line.date_end
+                                            - suspension.date_start)
             * contract line start before the suspension period and end after it
                 -> apply stop at suspension start date
                 -> apply plan successor:
                     - date_start: suspension.date_end
-                    - date_end: suspension.date_end + (suspension.date_end
-                                                    - suspension.date_start)
+                    - date_end: date_end + (suspension.date_end
+                                        - suspension.date_start)
             * contract line start and end's in the suspension period
                 -> apply delay
                     - delay: suspension.date_end - contract_line.end_date
@@ -531,6 +531,7 @@ class AccountAnalyticInvoiceLine(models.Model):
                 else:
                     delay = date_end - date_start
                 rec.delay(delay)
+                contract_line |= rec
             else:
                 if rec.date_end and rec.date_end < date_start:
                     rec.stop(date_start)
@@ -540,7 +541,7 @@ class AccountAnalyticInvoiceLine(models.Model):
                     and rec.date_end < date_end
                 ):
                     new_date_start = date_end
-                    new_date_end = new_date_start + (rec.date_end - date_start)
+                    new_date_end = date_end + (rec.date_end - date_start)
                     rec.stop(date_start)
                     contract_line |= rec.plan_successor(
                         new_date_start, new_date_end, is_auto_renew
@@ -550,7 +551,7 @@ class AccountAnalyticInvoiceLine(models.Model):
                     new_date_end = (
                         rec.date_end
                         if not rec.date_end
-                        else new_date_start + (date_end - date_start)
+                        else rec.date_end + (date_end - date_start)
                     )
                     rec.stop(date_start)
                     contract_line |= rec.plan_successor(
@@ -561,11 +562,39 @@ class AccountAnalyticInvoiceLine(models.Model):
 
     @api.multi
     def cancel(self):
+        if not all(self.mapped('is_cancel_allowed')):
+            raise ValidationError(_('Cancel not allowed for this line'))
         return self.write({'is_canceled': True})
 
     @api.multi
-    def uncancel(self):
-        return self.write({'is_canceled': False})
+    def uncancel(self, recurring_next_date):
+        if not all(self.mapped('is_un_cancel_allowed')):
+            raise ValidationError(_('Un-cancel not allowed for this line'))
+        return self.write(
+            {'is_canceled': False, 'recurring_next_date': recurring_next_date}
+        )
+
+    @api.multi
+    def action_uncancel(self):
+        self.ensure_one()
+        context = {
+            'default_contract_line_id': self.id,
+            'default_recurring_next_date': fields.Date.today(),
+        }
+        context.update(self.env.context)
+        view_id = self.env.ref(
+            'contract.contract_line_wizard_uncancel_form_view'
+        ).id
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Un-Cancel Contract Line',
+            'res_model': 'account.analytic.invoice.line.wizard',
+            'view_type': 'form',
+            'view_mode': 'form',
+            'views': [(view_id, 'form')],
+            'target': 'new',
+            'context': context,
+        }
 
     @api.multi
     def action_plan_successor(self):
