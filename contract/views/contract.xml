@@ -113,7 +113,7 @@
                                     type="object"
                                     icon="fa-ban text-danger"
                                     attrs="{'invisible': [('is_cancel_allowed', '=', False)]}"/>
-                            <button name="uncancel"
+                            <button name="action_uncancel"
                                     string="Un-cancel"
                                     type="object"
                                     icon="fa-ban text-success"

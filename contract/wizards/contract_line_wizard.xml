@@ -74,4 +74,26 @@
         </field>
     </record>
 
+    <record model="ir.ui.view" id="contract_line_wizard_uncancel_form_view">
+        <field name="name">contract.line.stop_plan_successor.wizard.form (in contract)</field>
+        <field name="model">account.analytic.invoice.line.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <group>
+                    <field name="contract_line_id" invisible="True"/>
+                    <field string="Suspension Start Date" name="recurring_next_date" required="True"/>
+                </group>
+                <footer>
+                    <button name="uncancel"
+                            string="Validate"
+                            class="btn-primary"
+                            type="object"/>
+                    <button string="Cancel"
+                            class="btn-default"
+                            special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
 </odoo>

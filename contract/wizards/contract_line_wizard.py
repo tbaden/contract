@@ -11,6 +11,7 @@ class AccountAnalyticInvoiceLineWizard(models.TransientModel):
 
     date_start = fields.Date(string='Date Start')
     date_end = fields.Date(string='Date End')
+    recurring_next_date = fields.Date(string='Next Invoice Date')
     is_auto_renew = fields.Boolean(string="Auto Renew", default=False)
     contract_line_id = fields.Many2one(
         comodel_name="account.analytic.invoice.line",
@@ -38,4 +39,10 @@ class AccountAnalyticInvoiceLineWizard(models.TransientModel):
             wizard.contract_line_id.stop_plan_successor(
                 wizard.date_start, wizard.date_end, wizard.is_auto_renew
             )
+        return True
+
+    @api.multi
+    def uncancel(self):
+        for wizard in self:
+            wizard.contract_line_id.uncancel(wizard.recurring_next_date)
         return True
