@@ -393,6 +393,8 @@ class AccountAnalyticInvoiceLine(models.Model):
         :return: delayed contract line
         """
         for rec in self:
+            old_date_start = rec.date_start
+            old_date_end = rec.date_end
             new_date_start = rec.date_start + delay_delta
             rec.recurring_next_date = self._compute_first_recurring_next_date(
                 new_date_start,
@@ -406,6 +408,21 @@ class AccountAnalyticInvoiceLine(models.Model):
                 else rec.date_end + delay_delta
             )
             rec.date_start = new_date_start
+            msg = _(
+                """Contract line for <strong>{product}</strong>
+                delayed: <br/>
+                - <strong>Start</strong>: {old_date_start} -- {new_date_start}
+                <br/>
+                - <strong>End</strong>: {old_date_end} -- {new_date_end}
+                """.format(
+                    product=rec.name,
+                    old_date_start=old_date_start,
+                    new_date_start=rec.date_start,
+                    old_date_end=old_date_end,
+                    new_date_end=rec.date_end,
+                )
+            )
+            rec.contract_id.message_post(msg)
 
     @api.multi
     def stop(self, date_end):
@@ -421,12 +438,25 @@ class AccountAnalyticInvoiceLine(models.Model):
             if date_end < rec.date_start:
                 rec.cancel()
             else:
+                old_date_end = rec.date_end
                 date_end = (
                     rec.date_end
                     if rec.date_end and rec.date_end < date_end
                     else date_end
                 )
                 rec.write({'date_end': date_end, 'is_auto_renew': False})
+
+                msg = _(
+                    """Contract line for <strong>{product}</strong>
+                    stopped: <br/>
+                    - <strong>End</strong>: {old_date_end} -- {new_date_end}
+                    """.format(
+                        product=rec.name,
+                        old_date_end=old_date_end,
+                        new_date_end=rec.date_end,
+                    )
+                )
+                rec.contract_id.message_post(msg)
         return True
 
     @api.multi
@@ -478,6 +508,20 @@ class AccountAnalyticInvoiceLine(models.Model):
             )
             rec.successor_contract_line_id = new_line
             contract_line |= new_line
+
+            msg = _(
+                """Contract line for <strong>{product}</strong>
+                planned a successor: <br/>
+                - <strong>Start</strong>: {new_date_start}
+                <br/>
+                - <strong>End</strong>: {new_date_end}
+                """.format(
+                    product=rec.name,
+                    new_date_start=new_line.date_start,
+                    new_date_end=new_line.date_end,
+                )
+            )
+            rec.contract_id.message_post(msg)
         return contract_line
 
     @api.multi
@@ -564,6 +608,13 @@ class AccountAnalyticInvoiceLine(models.Model):
     def cancel(self):
         if not all(self.mapped('is_cancel_allowed')):
             raise ValidationError(_('Cancel not allowed for this line'))
+        for contract in self.mapped('contract_id'):
+            lines = self.filtered(lambda l, c=contract: l.contract_id == c)
+            msg = _(
+                """Contract line un-canceled: %s"""
+                % "<br/>- ".join(lines.mapped('name'))
+            )
+            contract.message_post(msg)
         return self.write({'is_canceled': True})
 
     @api.multi
