@@ -697,7 +697,7 @@ class TestContract(TestContractBase):
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
         )
         self.assertTrue(new_line)
-        new_date_end = suspension_end + (suspension_end - suspension_start)
+        new_date_end = end_date + (suspension_end - suspension_start)
         self.assertEqual(new_line.date_start, suspension_end)
         self.assertEqual(new_line.date_end, new_date_end)
 
@@ -992,7 +992,7 @@ class TestContract(TestContractBase):
     def test_cancel(self):
         self.acct_line.cancel()
         self.assertTrue(self.acct_line.is_canceled)
-        self.acct_line.uncancel()
+        self.acct_line.uncancel(fields.Date.today())
         self.assertFalse(self.acct_line.is_canceled)
 
     def test_check_has_not_date_end_has_successor(self):
