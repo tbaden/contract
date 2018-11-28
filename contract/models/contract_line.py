@@ -96,22 +96,23 @@ class AccountAnalyticInvoiceLine(models.Model):
     )
     def _compute_allowed(self):
         for rec in self:
-            allowed = get_allowed(
-                rec.date_start,
-                rec.date_end,
-                rec.is_auto_renew,
-                rec.successor_contract_line_id,
-                rec.predecessor_contract_line_id,
-                rec.is_canceled,
-            )
-            if allowed:
-                rec.is_plan_successor_allowed = allowed.PLAN_SUCCESSOR
-                rec.is_stop_plan_successor_allowed = (
-                    allowed.STOP_PLAN_SUCCESSOR
+            if rec.date_start:
+                allowed = get_allowed(
+                    rec.date_start,
+                    rec.date_end,
+                    rec.is_auto_renew,
+                    rec.successor_contract_line_id,
+                    rec.predecessor_contract_line_id,
+                    rec.is_canceled,
                 )
-                rec.is_stop_allowed = allowed.STOP
-                rec.is_cancel_allowed = allowed.CANCEL
-                rec.is_un_cancel_allowed = allowed.UN_CANCEL
+                if allowed:
+                    rec.is_plan_successor_allowed = allowed.PLAN_SUCCESSOR
+                    rec.is_stop_plan_successor_allowed = (
+                        allowed.STOP_PLAN_SUCCESSOR
+                    )
+                    rec.is_stop_allowed = allowed.STOP
+                    rec.is_cancel_allowed = allowed.CANCEL
+                    rec.is_un_cancel_allowed = allowed.UN_CANCEL
 
     @api.constrains('is_auto_renew', 'successor_contract_line_id', 'date_end')
     def _check_allowed(self):
@@ -257,22 +258,24 @@ class AccountAnalyticInvoiceLine(models.Model):
     def _compute_create_invoice_visibility(self):
         today = fields.Date.today()
         for line in self:
-            if today < line.date_start:
-                line.create_invoice_visibility = False
-            elif not line.date_end:
-                line.create_invoice_visibility = True
-            elif line.recurring_next_date:
-                if line.recurring_invoicing_type == 'pre-paid':
-                    line.create_invoice_visibility = (
-                        line.recurring_next_date <= line.date_end
-                    )
-                else:
-                    line.create_invoice_visibility = (
-                        line.recurring_next_date
-                        - line.get_relative_delta(
-                            line.recurring_rule_type, line.recurring_interval
+            if line.date_start:
+                if today < line.date_start:
+                    line.create_invoice_visibility = False
+                elif not line.date_end:
+                    line.create_invoice_visibility = True
+                elif line.recurring_next_date:
+                    if line.recurring_invoicing_type == 'pre-paid':
+                        line.create_invoice_visibility = (
+                            line.recurring_next_date <= line.date_end
                         )
-                    ) <= line.date_end
+                    else:
+                        line.create_invoice_visibility = (
+                            line.recurring_next_date
+                            - line.get_relative_delta(
+                                line.recurring_rule_type,
+                                line.recurring_interval,
+                            )
+                        ) <= line.date_end
 
     @api.model
     def recurring_create_invoice(self, contract=False):
