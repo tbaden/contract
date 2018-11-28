@@ -1182,8 +1182,10 @@ class TestContract(TestContractBase):
         )
 
     def test_renew(self):
+        self.acct_line._onchange_is_auto_renew()
+        self.assertEqual(self.acct_line.date_end, to_date('2018-12-31'))
         new_line = self.acct_line.renew()
         self.assertFalse(self.acct_line.is_auto_renew)
         self.assertTrue(new_line.is_auto_renew)
         self.assertEqual(new_line.date_start, to_date('2019-01-01'))
-        self.assertEqual(new_line.date_end, to_date('2020-01-01'))
+        self.assertEqual(new_line.date_end, to_date('2019-12-31'))
