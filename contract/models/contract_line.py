@@ -91,6 +91,7 @@ class AccountAnalyticInvoiceLine(models.Model):
         'date_end',
         'is_auto_renew',
         'successor_contract_line_id',
+        'predecessor_contract_line_id',
         'is_canceled',
     )
     def _compute_allowed(self):
@@ -100,6 +101,7 @@ class AccountAnalyticInvoiceLine(models.Model):
                 rec.date_end,
                 rec.is_auto_renew,
                 rec.successor_contract_line_id,
+                rec.predecessor_contract_line_id,
                 rec.is_canceled,
             )
             if allowed:
@@ -626,6 +628,9 @@ class AccountAnalyticInvoiceLine(models.Model):
                 )
             )
             contract.message_post(body=msg)
+        self.mapped('predecessor_contract_line_id').write(
+            {'successor_contract_line_id': False}
+        )
         return self.write({'is_canceled': True})
 
     @api.multi
@@ -644,9 +649,14 @@ class AccountAnalyticInvoiceLine(models.Model):
                 )
             )
             contract.message_post(body=msg)
-        return self.write(
-            {'is_canceled': False, 'recurring_next_date': recurring_next_date}
-        )
+        for rec in self:
+            if rec.predecessor_contract_line_id:
+                rec.predecessor_contract_line_id.successor_contract_line_id = (
+                    rec
+                )
+            rec.is_canceled = False
+            rec.recurring_next_date = recurring_next_date
+        return True
 
     @api.multi
     def action_uncancel(self):
