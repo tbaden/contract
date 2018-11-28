@@ -26,20 +26,6 @@ class AccountAnalyticInvoiceLine(models.Model):
     create_invoice_visibility = fields.Boolean(
         compute='_compute_create_invoice_visibility'
     )
-    partner_id = fields.Many2one(
-        comodel_name="res.partner",
-        string="Partner (always False)",
-        related='contract_id.partner_id',
-        store=True,
-        readonly=True,
-    )
-    pricelist_id = fields.Many2one(
-        comodel_name='product.pricelist',
-        string='Pricelist',
-        related='contract_id.pricelist_id',
-        store=True,
-        readonly=True,
-    )
     successor_contract_line_id = fields.Many2one(
         comodel_name='account.analytic.invoice.line',
         string="Successor Contract Line",
