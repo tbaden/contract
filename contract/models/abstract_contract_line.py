@@ -14,7 +14,7 @@ from odoo.tools.translate import _
 
 class AccountAbstractAnalyticContractLine(models.AbstractModel):
     _name = 'account.abstract.analytic.contract.line'
-    _description = 'Account Abstract Analytic Contract Line'
+    _description = 'Abstract Recurring Contract Line'
 
     product_id = fields.Many2one(
         'product.product', string='Product', required=True

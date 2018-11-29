@@ -7,7 +7,7 @@ from dateutil.relativedelta import relativedelta
 from odoo import api, fields, models, _
 from odoo.exceptions import ValidationError
 
-from ..data.contract_line_constraints import get_allowed
+from .contract_line_constraints import get_allowed
 
 
 class AccountAnalyticInvoiceLine(models.Model):
@@ -16,8 +16,9 @@ class AccountAnalyticInvoiceLine(models.Model):
 
     contract_id = fields.Many2one(
         comodel_name='account.analytic.account',
-        string='Analytic Account',
+        string='Contract',
         required=True,
+        index=True,
         ondelete='cascade',
         oldname='analytic_account_id',
     )
@@ -36,7 +37,8 @@ class AccountAnalyticInvoiceLine(models.Model):
         required=False,
         readonly=True,
         copy=False,
-        help="Contract Line created by this one.",
+        help="In case of restart after suspension, this field contain the new "
+        "contract line created.",
     )
     predecessor_contract_line_id = fields.Many2one(
         comodel_name='account.analytic.invoice.line',
@@ -140,14 +142,14 @@ class AccountAnalyticInvoiceLine(models.Model):
                     )
                 if not rec.date_end:
                     raise ValidationError(
-                        _("An auto-renew line should have a " "date end ")
+                        _("An auto-renew line must have a end date")
                     )
             else:
                 if not rec.date_end and rec.successor_contract_line_id:
                     raise ValidationError(
                         _(
                             "A contract line with a successor "
-                            "should have date end"
+                            "must have a end date"
                         )
                     )
 
@@ -155,7 +157,7 @@ class AccountAnalyticInvoiceLine(models.Model):
     def _check_overlap_successor(self):
         for rec in self:
             if rec.date_end and rec.successor_contract_line_id:
-                if rec.date_end > rec.successor_contract_line_id.date_start:
+                if rec.date_end >= rec.successor_contract_line_id.date_start:
                     raise ValidationError(
                         _("Contract line and its successor overlapped")
                     )
@@ -164,7 +166,7 @@ class AccountAnalyticInvoiceLine(models.Model):
     def _check_overlap_predecessor(self):
         for rec in self:
             if rec.predecessor_contract_line_id:
-                if rec.date_start < rec.predecessor_contract_line_id.date_end:
+                if rec.date_start <= rec.predecessor_contract_line_id.date_end:
                     raise ValidationError(
                         _("Contract line and its predecessor overlapped")
                     )
@@ -188,7 +190,10 @@ class AccountAnalyticInvoiceLine(models.Model):
         )
 
     @api.onchange(
-        'is_auto_renew', 'auto_renew_rule_type', 'auto_renew_interval'
+        'date_start',
+        'is_auto_renew',
+        'auto_renew_rule_type',
+        'auto_renew_interval',
     )
     def _onchange_is_auto_renew(self):
         """Date end should be auto-computed if a contract line is set to
