@@ -385,9 +385,15 @@ class AccountAnalyticInvoiceLine(models.Model):
     @api.multi
     def _insert_markers(self, date_format):
         self.ensure_one()
-        date_from = fields.Date.from_string(self.recurring_next_date)
-        date_to = date_from + self.get_relative_delta(
-            self.recurring_rule_type, self.recurring_interval
+        date_from = self.last_date_invoiced or self.date_start + relativedelta(
+            days=1
+        )
+        date_to = (
+            date_from
+            + self.get_relative_delta(
+                self.recurring_rule_type, self.recurring_interval
+            )
+            - relativedelta(days=1)
         )
         name = self.name
         name = name.replace('#START#', date_from.strftime(date_format))
