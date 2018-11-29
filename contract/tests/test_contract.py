@@ -2,6 +2,7 @@
 # Copyright 2018 Tecnativa - Pedro M. Baeza
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
+from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 from odoo import fields
 from odoo.exceptions import ValidationError
@@ -828,10 +829,11 @@ class TestContract(TestContractBase):
         )
         self.assertEqual(
             self.acct_line.date_start,
-            start_date + (suspension_end - start_date),
+            start_date + (suspension_end - start_date) + timedelta(days=1),
         )
         self.assertEqual(
-            self.acct_line.date_end, end_date + (suspension_end - start_date)
+            self.acct_line.date_end,
+            end_date + (suspension_end - start_date) + timedelta(days=1),
         )
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
@@ -860,10 +862,11 @@ class TestContract(TestContractBase):
         )
         self.assertEqual(
             self.acct_line.date_start,
-            start_date + (suspension_end - start_date),
+            start_date + (suspension_end - start_date) + timedelta(days=1),
         )
         self.assertEqual(
-            self.acct_line.date_end, end_date + (suspension_end - start_date)
+            self.acct_line.date_end,
+            end_date + (suspension_end - start_date) + timedelta(days=1),
         )
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
@@ -893,7 +896,7 @@ class TestContract(TestContractBase):
         )
         self.assertEqual(
             self.acct_line.date_start,
-            start_date + (suspension_end - start_date),
+            start_date + (suspension_end - start_date) + timedelta(days=1),
         )
         self.assertFalse(self.acct_line.date_end)
         new_line = self.env['account.analytic.invoice.line'].search(
@@ -923,11 +926,13 @@ class TestContract(TestContractBase):
         )
         self.assertEqual(
             self.acct_line.date_start,
-            start_date + (suspension_end - suspension_start),
+            start_date
+            + (suspension_end - suspension_start)
+            + timedelta(days=1),
         )
         self.assertEqual(
             self.acct_line.date_end,
-            end_date + (suspension_end - suspension_start),
+            end_date + (suspension_end - suspension_start) + timedelta(days=1),
         )
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
@@ -957,7 +962,9 @@ class TestContract(TestContractBase):
         )
         self.assertEqual(
             self.acct_line.date_start,
-            start_date + (suspension_end - suspension_start),
+            start_date
+            + (suspension_end - suspension_start)
+            + timedelta(days=1),
         )
         self.assertFalse(self.acct_line.date_end)
         new_line = self.env['account.analytic.invoice.line'].search(
@@ -988,11 +995,13 @@ class TestContract(TestContractBase):
         wizard.stop_plan_successor()
         self.assertEqual(
             self.acct_line.date_start,
-            start_date + (suspension_end - suspension_start),
+            start_date
+            + (suspension_end - suspension_start)
+            + timedelta(days=1),
         )
         self.assertEqual(
             self.acct_line.date_end,
-            end_date + (suspension_end - suspension_start),
+            end_date + (suspension_end - suspension_start) + timedelta(days=1),
         )
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]

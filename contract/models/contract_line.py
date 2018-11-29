@@ -1,6 +1,7 @@
 # Copyright 2017 LasLabs Inc.
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
+from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 
 from odoo import api, fields, models, _
@@ -188,9 +189,13 @@ class AccountAnalyticInvoiceLine(models.Model):
         """Date end should be auto-computed if a contract line is set to
         auto_renew"""
         for rec in self.filtered('is_auto_renew'):
-            rec.date_end = self.date_start + self.get_relative_delta(
-                rec.auto_renew_rule_type, rec.auto_renew_interval
-            ) - relativedelta(days=1)
+            rec.date_end = (
+                self.date_start
+                + self.get_relative_delta(
+                    rec.auto_renew_rule_type, rec.auto_renew_interval
+                )
+                - relativedelta(days=1)
+            )
 
     @api.onchange(
         'date_start',
@@ -582,9 +587,9 @@ class AccountAnalyticInvoiceLine(models.Model):
         for rec in self:
             if rec.date_start >= date_start:
                 if rec.date_start < date_end:
-                    delay = date_end - rec.date_start
+                    delay = (date_end - rec.date_start) + timedelta(days=1)
                 else:
-                    delay = date_end - date_start
+                    delay = (date_end - date_start) + timedelta(days=1)
                 rec.delay(delay)
                 contract_line |= rec
             else:
@@ -753,9 +758,13 @@ class AccountAnalyticInvoiceLine(models.Model):
     def _get_renewal_dates(self):
         self.ensure_one()
         date_start = self.date_end + relativedelta(days=1)
-        date_end = date_start + self.get_relative_delta(
-            self.auto_renew_rule_type, self.auto_renew_interval
-        ) - relativedelta(days=1)
+        date_end = (
+            date_start
+            + self.get_relative_delta(
+                self.auto_renew_rule_type, self.auto_renew_interval
+            )
+            - relativedelta(days=1)
+        )
         return date_start, date_end
 
     @api.multi
