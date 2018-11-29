@@ -53,7 +53,7 @@ class AccountAnalyticAccount(models.Model):
         for contract in self:
             contract.date_end = False
             date_end = contract.recurring_invoice_line_ids.mapped('date_end')
-            if all(date_end):
+            if date_end and all(date_end):
                 contract.date_end = max(date_end)
 
     @api.depends('recurring_invoice_line_ids.recurring_next_date')
@@ -62,7 +62,7 @@ class AccountAnalyticAccount(models.Model):
             recurring_next_date = contract.recurring_invoice_line_ids.filtered(
                 'create_invoice_visibility'
             ).mapped('recurring_next_date')
-            if recurring_next_date:
+            if recurring_next_date and all(recurring_next_date):
                 contract.recurring_next_date = min(recurring_next_date)
 
     @api.depends('recurring_invoice_line_ids.create_invoice_visibility')
