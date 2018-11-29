@@ -24,6 +24,9 @@ class AccountAnalyticInvoiceLine(models.Model):
     date_start = fields.Date(string='Date Start', default=fields.Date.today())
     date_end = fields.Date(string='Date End', index=True)
     recurring_next_date = fields.Date(string='Date of Next Invoice')
+    last_date_invoiced = fields.Date(
+        string='Last Date Invoiced', readonly=True
+    )
     create_invoice_visibility = fields.Boolean(
         compute='_compute_create_invoice_visibility'
     )
@@ -90,6 +93,7 @@ class AccountAnalyticInvoiceLine(models.Model):
     @api.depends(
         'date_start',
         'date_end',
+        'last_date_invoiced',
         'is_auto_renew',
         'successor_contract_line_id',
         'predecessor_contract_line_id',
@@ -101,19 +105,20 @@ class AccountAnalyticInvoiceLine(models.Model):
                 allowed = get_allowed(
                     rec.date_start,
                     rec.date_end,
+                    rec.last_date_invoiced,
                     rec.is_auto_renew,
                     rec.successor_contract_line_id,
                     rec.predecessor_contract_line_id,
                     rec.is_canceled,
                 )
                 if allowed:
-                    rec.is_plan_successor_allowed = allowed.PLAN_SUCCESSOR
+                    rec.is_plan_successor_allowed = allowed.plan_successor
                     rec.is_stop_plan_successor_allowed = (
-                        allowed.STOP_PLAN_SUCCESSOR
+                        allowed.stop_plan_successor
                     )
-                    rec.is_stop_allowed = allowed.STOP
-                    rec.is_cancel_allowed = allowed.CANCEL
-                    rec.is_un_cancel_allowed = allowed.UN_CANCEL
+                    rec.is_stop_allowed = allowed.stop
+                    rec.is_cancel_allowed = allowed.cancel
+                    rec.is_un_cancel_allowed = allowed.uncancel
 
     @api.constrains('is_auto_renew', 'successor_contract_line_id', 'date_end')
     def _check_allowed(self):
@@ -386,13 +391,26 @@ class AccountAnalyticInvoiceLine(models.Model):
 
     @api.multi
     def _update_recurring_next_date(self):
-        for line in self:
-            ref_date = line.recurring_next_date or fields.Date.today()
+        for rec in self:
+            if rec.recurring_rule_type == 'monthlylastday':
+                rec.last_date_invoiced = rec.recurring_next_date
+            elif rec.recurring_invoicing_type == 'post-paid':
+                rec.last_date_invoiced = (
+                    rec.recurring_next_date - relativedelta(days=1)
+                )
+            ref_date = rec.recurring_next_date or fields.Date.today()
             old_date = fields.Date.from_string(ref_date)
             new_date = old_date + self.get_relative_delta(
-                line.recurring_rule_type, line.recurring_interval
+                rec.recurring_rule_type, rec.recurring_interval
             )
-            line.recurring_next_date = new_date
+            rec.recurring_next_date = new_date
+            if (
+                rec.recurring_invoicing_type == 'pre-paid'
+                and rec.recurring_rule_type != 'monthlylastday'
+            ):
+                rec.last_date_invoiced = (
+                    rec.recurring_next_date - relativedelta(days=1)
+                )
 
     @api.model
     def get_relative_delta(self, recurring_rule_type, interval):
