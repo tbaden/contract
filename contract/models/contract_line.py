@@ -526,24 +526,9 @@ class AccountAnalyticInvoiceLine(models.Model):
             if rec.date_end:
                 rec.date_end += delay_delta
             rec.date_start = new_date_start
-            msg = _(
-                """Contract line for <strong>{product}</strong>
-                delayed: <br/>
-                - <strong>Start</strong>: {old_date_start} -- {new_date_start}
-                <br/>
-                - <strong>End</strong>: {old_date_end} -- {new_date_end}
-                """.format(
-                    product=rec.name,
-                    old_date_start=old_date_start,
-                    new_date_start=rec.date_start,
-                    old_date_end=old_date_end,
-                    new_date_end=rec.date_end,
-                )
-            )
-            rec.contract_id.message_post(body=msg)
 
     @api.multi
-    def stop(self, date_end):
+    def stop(self, date_end, post_message=True):
         """
         Put date_end on contract line
         We don't consider contract lines that end's before the new end date
@@ -557,18 +542,19 @@ class AccountAnalyticInvoiceLine(models.Model):
                 rec.cancel()
             else:
                 if not rec.date_end or rec.date_end > date_end:
-                    old_date_end = rec.date_end
-                    msg = _(
-                        """Contract line for <strong>{product}</strong>
-                        stopped: <br/>
-                        - <strong>End</strong>: {old_end} -- {new_end}
-                        """.format(
-                            product=rec.name,
-                            old_end=old_date_end,
-                            new_end=rec.date_end,
+                    if post_message:
+                        old_date_end = rec.date_end
+                        msg = _(
+                            """Contract line for <strong>{product}</strong>
+                            stopped: <br/>
+                            - <strong>End</strong>: {old_end} -- {new_end}
+                            """.format(
+                                product=rec.name,
+                                old_end=old_date_end,
+                                new_end=rec.date_end,
+                            )
                         )
-                    )
-                    rec.contract_id.message_post(body=msg)
+                        rec.contract_id.message_post(body=msg)
                     rec.write({'date_end': date_end, 'is_auto_renew': False})
                 else:
                     rec.write({'is_auto_renew': False})
@@ -598,7 +584,12 @@ class AccountAnalyticInvoiceLine(models.Model):
 
     @api.multi
     def plan_successor(
-        self, date_start, date_end, is_auto_renew, recurring_next_date=False
+        self,
+        date_start,
+        date_end,
+        is_auto_renew,
+        recurring_next_date=False,
+        post_message=True,
     ):
         """
         Create a copy of a contract line in a new interval
@@ -623,20 +614,20 @@ class AccountAnalyticInvoiceLine(models.Model):
             )
             rec.successor_contract_line_id = new_line
             contract_line |= new_line
-
-            msg = _(
-                """Contract line for <strong>{product}</strong>
-                planned a successor: <br/>
-                - <strong>Start</strong>: {new_date_start}
-                <br/>
-                - <strong>End</strong>: {new_date_end}
-                """.format(
-                    product=rec.name,
-                    new_date_start=new_line.date_start,
-                    new_date_end=new_line.date_end,
+            if post_message:
+                msg = _(
+                    """Contract line for <strong>{product}</strong>
+                    planned a successor: <br/>
+                    - <strong>Start</strong>: {new_date_start}
+                    <br/>
+                    - <strong>End</strong>: {new_date_end}
+                    """.format(
+                        product=rec.name,
+                        new_date_start=new_line.date_start,
+                        new_date_end=new_line.date_end,
+                    )
                 )
-            )
-            rec.contract_id.message_post(body=msg)
+                rec.contract_id.message_post(body=msg)
         return contract_line
 
     @api.multi
@@ -687,30 +678,60 @@ class AccountAnalyticInvoiceLine(models.Model):
                 contract_line |= rec
             else:
                 if rec.date_end and rec.date_end < date_start:
-                    rec.stop(date_start)
+                    rec.stop(date_start, post_message=False)
                 elif (
                     rec.date_end
                     and rec.date_end > date_start
                     and rec.date_end < date_end
                 ):
-                    new_date_start = date_end
-                    new_date_end = date_end + (rec.date_end - date_start)
-                    rec.stop(date_start)
+                    new_date_start = date_end + relativedelta(days=1)
+                    new_date_end = (
+                        date_end
+                        + (rec.date_end - date_start)
+                        + relativedelta(days=1)
+                    )
+                    rec.stop(
+                        date_start - relativedelta(days=1), post_message=False
+                    )
                     contract_line |= rec.plan_successor(
-                        new_date_start, new_date_end, is_auto_renew
+                        new_date_start,
+                        new_date_end,
+                        is_auto_renew,
+                        post_message=False,
                     )
                 else:
-                    new_date_start = date_end
-                    new_date_end = (
-                        rec.date_end
-                        if not rec.date_end
-                        else rec.date_end + (date_end - date_start)
-                    )
-                    rec.stop(date_start)
-                    contract_line |= rec.plan_successor(
-                        new_date_start, new_date_end, is_auto_renew
-                    )
+                    new_date_start = date_end + relativedelta(days=1)
+                    if rec.date_end:
+                        new_date_end = (
+                            rec.date_end
+                            + (date_end - date_start)
+                            + relativedelta(days=1)
+                        )
+                    else:
+                        new_date_end = rec.date_end
 
+                    rec.stop(
+                        date_start - relativedelta(days=1), post_message=False
+                    )
+                    contract_line |= rec.plan_successor(
+                        new_date_start,
+                        new_date_end,
+                        is_auto_renew,
+                        post_message=False,
+                    )
+            msg = _(
+                """Contract line for <strong>{product}</strong>
+                suspended: <br/>
+                - <strong>Suspension Start</strong>: {new_date_start}
+                <br/>
+                - <strong>Suspension End</strong>: {new_date_end}
+                """.format(
+                    product=rec.name,
+                    new_date_start=date_start,
+                    new_date_end=date_end,
+                )
+            )
+            rec.contract_id.message_post(body=msg)
         return contract_line
 
     @api.multi
@@ -865,11 +886,26 @@ class AccountAnalyticInvoiceLine(models.Model):
         res = self.env['account.analytic.invoice.line']
         for rec in self:
             is_auto_renew = rec.is_auto_renew
-            rec.stop(rec.date_end)
+            rec.stop(rec.date_end, post_message=False)
             date_start, date_end = rec._get_renewal_dates()
-            new_line = rec.plan_successor(date_start, date_end, is_auto_renew)
+            new_line = rec.plan_successor(
+                date_start, date_end, is_auto_renew, post_message=False
+            )
             new_line._onchange_date_start()
             res |= new_line
+            msg = _(
+                """Contract line for <strong>{product}</strong>
+                renewed: <br/>
+                - <strong>Start</strong>: {new_date_start}
+                <br/>
+                - <strong>End</strong>: {new_date_end}
+                """.format(
+                    product=rec.name,
+                    new_date_start=date_start,
+                    new_date_end=date_end,
+                )
+            )
+            rec.contract_id.message_post(body=msg)
         return res
 
     @api.model
