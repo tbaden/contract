@@ -22,7 +22,10 @@ class AccountAnalyticInvoiceLine(models.Model):
         ondelete='cascade',
         oldname='analytic_account_id',
     )
-    date_start = fields.Date(string='Date Start', default=fields.Date.today())
+    date_start = fields.Date(
+        string='Date Start',
+        default=lambda self: fields.Date.context_today(self),
+    )
     date_end = fields.Date(string='Date End', index=True)
     recurring_next_date = fields.Date(string='Date of Next Invoice')
     last_date_invoiced = fields.Date(
@@ -77,7 +80,7 @@ class AccountAnalyticInvoiceLine(models.Model):
 
     @api.multi
     def _compute_state(self):
-        today = fields.Date.today()
+        today = fields.Date.context_today(self)
         for rec in self:
             if rec.is_canceled:
                 rec.state = 'canceled'
@@ -229,22 +232,45 @@ class AccountAnalyticInvoiceLine(models.Model):
                 if line.date_start > line.recurring_next_date:
                     raise ValidationError(
                         _(
-                            "You can't have a next invoicing date before the "
-                            "start of the contract '%s'"
+                            "You can't have a date of next invoice anterior "
+                            "to the start of the contract line '%s'"
                         )
-                        % line.contract_id.name
+                        % line.name
                     )
+
+    @api.constrains('date_start', 'date_end', 'last_date_invoiced')
+    def _check_last_date_invoiced(self):
+        for rec in self.filtered('last_date_invoiced'):
+            if rec.date_start and rec.date_start > rec.last_date_invoiced:
+                raise ValidationError(
+                    _(
+                        "You can't have the start date after the date of last "
+                        "invoice for the contract line '%s'"
+                    )
+                    % rec.name
+                )
+            if rec.date_end and rec.date_end < rec.last_date_invoiced:
+                raise ValidationError(
+                    _(
+                        "You can't have the end date before the date of last "
+                        "invoice for the contract line '%s'"
+                    )
+                    % rec.name
+                )
 
     @api.constrains('recurring_next_date')
     def _check_recurring_next_date_recurring_invoices(self):
-        for line in self.filtered('contract_id.recurring_invoices'):
-            if not line.recurring_next_date:
+        for rec in self.filtered('contract_id.recurring_invoices'):
+            if not rec.recurring_next_date and (
+                not rec.last_date_invoiced
+                or rec.last_date_invoiced < rec.date_end
+            ):
                 raise ValidationError(
                     _(
-                        "You must supply a next invoicing date for contract "
-                        "'%s'"
+                        "You must supply a date of next invoice for contract "
+                        "line '%s'"
                     )
-                    % line.contract_id.name
+                    % rec.name
                 )
 
     @api.constrains('date_start')
@@ -252,8 +278,8 @@ class AccountAnalyticInvoiceLine(models.Model):
         for line in self.filtered('contract_id.recurring_invoices'):
             if not line.date_start:
                 raise ValidationError(
-                    _("You must supply a start date for contract '%s'")
-                    % line.contract_id.name
+                    _("You must supply a start date for contract line '%s'")
+                    % line.name
                 )
 
     @api.constrains('date_start', 'date_end')
@@ -263,39 +289,28 @@ class AccountAnalyticInvoiceLine(models.Model):
                 if line.date_start > line.date_end:
                     raise ValidationError(
                         _(
-                            "Contract '%s' start date can't be later than "
-                            "end date"
+                            "Contract line '%s' start date can't be later than"
+                            " end date"
                         )
-                        % line.contract_id.name
+                        % line.name
                     )
 
     @api.depends('recurring_next_date', 'date_start', 'date_end')
     def _compute_create_invoice_visibility(self):
-        today = fields.Date.today()
-        for line in self:
-            if line.date_start:
-                if today < line.date_start:
-                    line.create_invoice_visibility = False
-                elif not line.date_end:
-                    line.create_invoice_visibility = True
-                elif line.recurring_next_date:
-                    if line.recurring_invoicing_type == 'pre-paid':
-                        line.create_invoice_visibility = (
-                            line.recurring_next_date <= line.date_end
-                        )
-                    else:
-                        line.create_invoice_visibility = (
-                            line.recurring_next_date
-                            - line.get_relative_delta(
-                                line.recurring_rule_type,
-                                line.recurring_interval,
-                            )
-                        ) <= line.date_end
+        today = fields.Date.context_today(self)
+        for rec in self:
+            if rec.date_start:
+                if today < rec.date_start:
+                    rec.create_invoice_visibility = False
+                else:
+                    rec.create_invoice_visibility = bool(
+                        rec.recurring_next_date
+                    )
 
     @api.model
-    def recurring_create_invoice(self, contract=False):
+    def _get_recurring_create_invoice_domain(self, contract=False):
         domain = []
-        date_ref = fields.Date.today()
+        date_ref = fields.Date.context_today(self)
         if contract:
             contract.ensure_one()
             date_ref = contract.recurring_next_date
@@ -306,39 +321,36 @@ class AccountAnalyticInvoiceLine(models.Model):
                 ('contract_id.recurring_invoices', '=', True),
                 ('recurring_next_date', '<=', date_ref),
                 ('is_canceled', '=', False),
-                # '|',
-                # ('date_end', '=', False),
-                # ('date_end', '>=', date_ref),
-                # with this leaf, it's impossible to invoice the last period
-                # in post-paid case.
-                # i.e: date_end = 15/03 recurring_next_date = 31/03
-                # A solution for this, is to only check recurring_next_date
-                # and filter with create_invoice_visibility
             ]
         )
-        lines = self.search(domain).filtered('create_invoice_visibility')
-        if lines:
-            return lines._recurring_create_invoice()
-        return False
+        return domain
 
-    @api.multi
-    def _recurring_create_invoice(self):
+    @api.model
+    def recurring_create_invoice(self, contract=False):
+        domain = self._get_recurring_create_invoice_domain(contract)
+        contract_to_invoice = self.read_group(
+            domain, ['id', 'contract_id'], ['contract_id']
+        )
+        return self._recurring_create_invoice(contract_to_invoice)
+
+    @api.model
+    def _recurring_create_invoice(self, contract_to_invoice):
         """Create invoices from contracts
 
         :return: invoices created
         """
         invoices = self.env['account.invoice']
-        for contract in self.mapped('contract_id'):
-            lines = self.filtered(lambda l: l.contract_id == contract)
-            invoices |= lines._create_invoice()
-            lines._update_recurring_next_date()
+        for contract in contract_to_invoice:
+            lines = self.search(contract['__domain'])
+            if lines:
+                invoices |= lines._create_invoice()
+                lines._update_recurring_next_date()
         return invoices
 
     @api.multi
     def _create_invoice(self):
         """
-        :param invoice: If not False add lines to this invoice
-        :return: invoice created or updated
+        :return: invoice created
         """
         contract = self.mapped('contract_id')
         date_invoice = min(self.mapped('recurring_next_date'))
@@ -369,10 +381,8 @@ class AccountAnalyticInvoiceLine(models.Model):
         invoice_line_vals = invoice_line._convert_to_write(invoice_line._cache)
         # Insert markers
         contract = self.contract_id
-        lang_obj = self.env['res.lang']
-        lang = lang_obj.search([('code', '=', contract.partner_id.lang)])
-        date_format = lang.date_format or '%m/%d/%Y'
-        name = self._insert_markers(date_format)
+        first_date_invoiced, last_date_invoiced = self._get_invoiced_period()
+        name = self._insert_markers(first_date_invoiced, last_date_invoiced)
         invoice_line_vals.update(
             {
                 'name': name,
@@ -383,45 +393,98 @@ class AccountAnalyticInvoiceLine(models.Model):
         return invoice_line_vals
 
     @api.multi
-    def _insert_markers(self, date_format):
+    def _get_invoiced_period(self):
         self.ensure_one()
-        date_from = self.last_date_invoiced or self.date_start + relativedelta(
-            days=1
+        first_date_invoiced = (
+            self.last_date_invoiced + relativedelta(days=1)
+            if self.last_date_invoiced
+            else self.date_start
         )
-        date_to = (
-            date_from
-            + self.get_relative_delta(
-                self.recurring_rule_type, self.recurring_interval
+        if self.recurring_rule_type == 'monthlylastday':
+            last_date_invoiced = first_date_invoiced + self.get_relative_delta(
+                self.recurring_rule_type, self.recurring_interval - 1
             )
-            - relativedelta(days=1)
+        else:
+            last_date_invoiced = (
+                first_date_invoiced
+                + self.get_relative_delta(
+                    self.recurring_rule_type, self.recurring_interval
+                )
+                - relativedelta(days=1)
+            )
+        if self.date_end and self.date_end < last_date_invoiced:
+            last_date_invoiced = self.date_end
+        return first_date_invoiced, last_date_invoiced
+
+    @api.multi
+    def _insert_markers(self, first_date_invoiced, last_date_invoiced):
+        self.ensure_one()
+        lang_obj = self.env['res.lang']
+        lang = lang_obj.search(
+            [('code', '=', self.contract_id.partner_id.lang)]
         )
+        date_format = lang.date_format or '%m/%d/%Y'
         name = self.name
-        name = name.replace('#START#', date_from.strftime(date_format))
-        name = name.replace('#END#', date_to.strftime(date_format))
+        name = name.replace(
+            '#START#', first_date_invoiced.strftime(date_format)
+        )
+        name = name.replace('#END#', last_date_invoiced.strftime(date_format))
         return name
 
     @api.multi
     def _update_recurring_next_date(self):
         for rec in self:
-            if rec.recurring_rule_type == 'monthlylastday':
-                rec.last_date_invoiced = rec.recurring_next_date
-            elif rec.recurring_invoicing_type == 'post-paid':
-                rec.last_date_invoiced = (
-                    rec.recurring_next_date - relativedelta(days=1)
-                )
-            ref_date = rec.recurring_next_date or fields.Date.today()
-            old_date = fields.Date.from_string(ref_date)
+            old_date = rec.recurring_next_date
             new_date = old_date + self.get_relative_delta(
                 rec.recurring_rule_type, rec.recurring_interval
             )
-            rec.recurring_next_date = new_date
-            if (
-                rec.recurring_invoicing_type == 'pre-paid'
-                and rec.recurring_rule_type != 'monthlylastday'
-            ):
+
+            if rec.recurring_rule_type == 'monthlylastday':
                 rec.last_date_invoiced = (
-                    rec.recurring_next_date - relativedelta(days=1)
+                    old_date
+                    if rec.date_end and old_date < rec.date_end
+                    else rec.date_end
                 )
+            elif rec.recurring_invoicing_type == 'post-paid':
+                rec.last_date_invoiced = (
+                    old_date - relativedelta(days=1)
+                    if rec.date_end and old_date < rec.date_end
+                    else rec.date_end
+                )
+            elif rec.recurring_invoicing_type == 'pre-paid':
+                rec.last_date_invoiced = (
+                    new_date - relativedelta(days=1)
+                    if rec.date_end and new_date < rec.date_end
+                    else rec.date_end
+                )
+            if (
+                rec.last_date_invoiced
+                and rec.last_date_invoiced == rec.date_end
+            ):
+                rec.recurring_next_date = False
+            else:
+                rec.recurring_next_date = new_date
+
+    @api.multi
+    def _init_last_date_invoiced(self):
+        """Used to init last_date_invoiced for migration purpose"""
+        for rec in self:
+            if rec.recurring_rule_type == 'monthlylastday':
+                last_date_invoiced = (
+                    rec.recurring_next_date
+                    - self.get_relative_delta(
+                        rec.recurring_rule_type, rec.recurring_interval
+                    )
+                )
+            elif rec.recurring_invoicing_type == 'post-paid':
+                last_date_invoiced = (
+                    rec.recurring_next_date
+                    - self.get_relative_delta(
+                        rec.recurring_rule_type, rec.recurring_interval
+                    )
+                ) - relativedelta(days=1)
+            if last_date_invoiced > rec.date_start:
+                rec.last_date_invoiced = last_date_invoiced
 
     @api.model
     def get_relative_delta(self, recurring_rule_type, interval):
@@ -437,13 +500,20 @@ class AccountAnalyticInvoiceLine(models.Model):
             return relativedelta(years=interval)
 
     @api.multi
-    def delay(self, delay_delta):
+    def _delay(self, delay_delta):
         """
         Delay a contract line
         :param delay_delta: delay relative delta
         :return: delayed contract line
         """
         for rec in self:
+            if rec.last_date_invoiced:
+                raise ValidationError(
+                    _(
+                        "You can't delay a contract line "
+                        "invoiced at least one time."
+                    )
+                )
             old_date_start = rec.date_start
             old_date_end = rec.date_end
             new_date_start = rec.date_start + delay_delta
@@ -453,11 +523,8 @@ class AccountAnalyticInvoiceLine(models.Model):
                 rec.recurring_rule_type,
                 rec.recurring_interval,
             )
-            rec.date_end = (
-                rec.date_end
-                if not rec.date_end
-                else rec.date_end + delay_delta
-            )
+            if rec.date_end:
+                rec.date_end += delay_delta
             rec.date_start = new_date_start
             msg = _(
                 """Contract line for <strong>{product}</strong>
@@ -489,25 +556,22 @@ class AccountAnalyticInvoiceLine(models.Model):
             if date_end < rec.date_start:
                 rec.cancel()
             else:
-                old_date_end = rec.date_end
-                date_end = (
-                    rec.date_end
-                    if rec.date_end and rec.date_end < date_end
-                    else date_end
-                )
-                rec.write({'date_end': date_end, 'is_auto_renew': False})
-
-                msg = _(
-                    """Contract line for <strong>{product}</strong>
-                    stopped: <br/>
-                    - <strong>End</strong>: {old_date_end} -- {new_date_end}
-                    """.format(
-                        product=rec.name,
-                        old_date_end=old_date_end,
-                        new_date_end=rec.date_end,
+                if not rec.date_end or rec.date_end > date_end:
+                    old_date_end = rec.date_end
+                    msg = _(
+                        """Contract line for <strong>{product}</strong>
+                        stopped: <br/>
+                        - <strong>End</strong>: {old_end} -- {new_end}
+                        """.format(
+                            product=rec.name,
+                            old_end=old_date_end,
+                            new_end=rec.date_end,
+                        )
                     )
-                )
-                rec.contract_id.message_post(body=msg)
+                    rec.contract_id.message_post(body=msg)
+                    rec.write({'date_end': date_end, 'is_auto_renew': False})
+                else:
+                    rec.write({'is_auto_renew': False})
         return True
 
     @api.multi
@@ -619,7 +683,7 @@ class AccountAnalyticInvoiceLine(models.Model):
                     delay = (date_end - rec.date_start) + timedelta(days=1)
                 else:
                     delay = (date_end - date_start) + timedelta(days=1)
-                rec.delay(delay)
+                rec._delay(delay)
                 contract_line |= rec
             else:
                 if rec.date_end and rec.date_end < date_start:
@@ -700,7 +764,7 @@ class AccountAnalyticInvoiceLine(models.Model):
         self.ensure_one()
         context = {
             'default_contract_line_id': self.id,
-            'default_recurring_next_date': fields.Date.today(),
+            'default_recurring_next_date': fields.Date.context_today(self),
         }
         context.update(self.env.context)
         view_id = self.env.ref(
@@ -810,7 +874,7 @@ class AccountAnalyticInvoiceLine(models.Model):
 
     @api.model
     def _contract_line_to_renew_domain(self):
-        date_ref = fields.datetime.today() + self.get_relative_delta(
+        date_ref = fields.Date.context_today(self) + self.get_relative_delta(
             self.termination_notice_rule_type, self.termination_notice_interval
         )
         return [
