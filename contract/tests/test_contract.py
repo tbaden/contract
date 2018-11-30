@@ -777,13 +777,21 @@ class TestContract(TestContractBase):
         self.acct_line.stop_plan_successor(
             suspension_start, suspension_end, True
         )
-        self.assertEqual(self.acct_line.date_end, suspension_start)
+        self.assertEqual(
+            self.acct_line.date_end, suspension_start - relativedelta(days=1)
+        )
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
         )
         self.assertTrue(new_line)
-        new_date_end = suspension_end + (end_date - suspension_start)
-        self.assertEqual(new_line.date_start, suspension_end)
+        new_date_end = (
+            suspension_end
+            + (end_date - suspension_start)
+            + relativedelta(days=1)
+        )
+        self.assertEqual(
+            new_line.date_start, suspension_end + relativedelta(days=1)
+        )
         self.assertEqual(new_line.date_end, new_date_end)
 
     def test_stop_plan_successor_contract_line_3(self):
@@ -809,13 +817,21 @@ class TestContract(TestContractBase):
         self.acct_line.stop_plan_successor(
             suspension_start, suspension_end, True
         )
-        self.assertEqual(self.acct_line.date_end, suspension_start)
+        self.assertEqual(
+            self.acct_line.date_end, suspension_start - relativedelta(days=1)
+        )
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
         )
         self.assertTrue(new_line)
-        new_date_end = end_date + (suspension_end - suspension_start)
-        self.assertEqual(new_line.date_start, suspension_end)
+        new_date_end = (
+            end_date
+            + (suspension_end - suspension_start)
+            + relativedelta(days=1)
+        )
+        self.assertEqual(
+            new_line.date_start, suspension_end + relativedelta(days=1)
+        )
         self.assertEqual(new_line.date_end, new_date_end)
 
     def test_stop_plan_successor_contract_line_3_without_end_date(self):
@@ -842,12 +858,16 @@ class TestContract(TestContractBase):
         self.acct_line.stop_plan_successor(
             suspension_start, suspension_end, False
         )
-        self.assertEqual(self.acct_line.date_end, suspension_start)
+        self.assertEqual(
+            self.acct_line.date_end, suspension_start - relativedelta(days=1)
+        )
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
         )
         self.assertTrue(new_line)
-        self.assertEqual(new_line.date_start, suspension_end)
+        self.assertEqual(
+            new_line.date_start, suspension_end + relativedelta(days=1)
+        )
         self.assertFalse(new_line.date_end)
 
     def test_stop_plan_successor_contract_line_4(self):
@@ -1154,7 +1174,9 @@ class TestContract(TestContractBase):
         self.acct_line.stop_plan_successor(
             suspension_start, suspension_end, True
         )
-        self.assertEqual(self.acct_line.date_end, suspension_start)
+        self.assertEqual(
+            self.acct_line.date_end, suspension_start - relativedelta(days=1)
+        )
         new_line = self.env['account.analytic.invoice.line'].search(
             [('predecessor_contract_line_id', '=', self.acct_line.id)]
         )
@@ -1163,10 +1185,13 @@ class TestContract(TestContractBase):
         self.assertTrue(new_line.is_canceled)
         self.assertFalse(self.acct_line.successor_contract_line_id)
         self.assertEqual(new_line.predecessor_contract_line_id, self.acct_line)
-        new_line.uncancel(suspension_end)
+        new_line.uncancel(suspension_end + relativedelta(days=1))
         self.assertFalse(new_line.is_canceled)
         self.assertEqual(self.acct_line.successor_contract_line_id, new_line)
-        self.assertEqual(new_line.recurring_next_date, suspension_end)
+        self.assertEqual(
+            new_line.recurring_next_date,
+            suspension_end + relativedelta(days=1),
+        )
 
     def test_cancel_uncancel_with_predecessor_has_successor(self):
         suspension_start = fields.Date.today() + relativedelta(months=6)
