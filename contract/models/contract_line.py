@@ -29,7 +29,7 @@ class AccountAnalyticInvoiceLine(models.Model):
     date_end = fields.Date(string='Date End', index=True)
     recurring_next_date = fields.Date(string='Date of Next Invoice')
     last_date_invoiced = fields.Date(
-        string='Last Date Invoiced', readonly=True
+        string='Last Date Invoiced', readonly=True, copy=False
     )
     create_invoice_visibility = fields.Boolean(
         compute='_compute_create_invoice_visibility'

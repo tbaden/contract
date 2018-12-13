@@ -159,6 +159,24 @@ class TestContract(TestContractBase):
             self.contract.partner_id.user_id, self.invoice_monthly.user_id
         )
 
+    def test_contract_recurring_next_date(self):
+        recurring_next_date = to_date('2018-01-15')
+        self.assertEqual(
+            self.contract.recurring_next_date, recurring_next_date
+        )
+        contract_line = self.acct_line.copy(
+            {'recurring_next_date': '2018-01-14'}
+        )
+        recurring_next_date = to_date('2018-01-14')
+        self.assertEqual(
+            self.contract.recurring_next_date, recurring_next_date
+        )
+        contract_line.cancel()
+        recurring_next_date = to_date('2018-01-15')
+        self.assertEqual(
+            self.contract.recurring_next_date, recurring_next_date
+        )
+
     def test_contract_daily(self):
         recurring_next_date = to_date('2018-02-23')
         last_date_invoiced = to_date('2018-02-22')
