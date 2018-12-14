@@ -1317,6 +1317,36 @@ class TestContract(TestContractBase):
         self.assertEqual(first, to_date('2018-03-01'))
         self.assertEqual(last, to_date('2018-03-15'))
 
+    def test_get_invoiced_period_monthly_pre_paid_2(self):
+        self.acct_line.date_start = '2018-01-05'
+        self.acct_line.recurring_invoicing_type = 'pre-paid'
+        self.acct_line.recurring_rule_type = 'monthly'
+        self.acct_line.date_end = '2018-08-15'
+        self.acct_line._onchange_date_start()
+        self.contract.recurring_create_invoice()
+        first, last = self.acct_line._get_invoiced_period()
+        self.assertEqual(first, to_date('2018-02-05'))
+        self.assertEqual(last, to_date('2018-03-04'))
+        self.acct_line.recurring_next_date = '2018-06-05'
+        first, last = self.acct_line._get_invoiced_period()
+        self.assertEqual(first, to_date('2018-02-05'))
+        self.assertEqual(last, to_date('2018-07-04'))
+
+    def test_get_invoiced_period_monthly_post_paid_2(self):
+        self.acct_line.date_start = '2018-01-05'
+        self.acct_line.recurring_invoicing_type = 'post-paid'
+        self.acct_line.recurring_rule_type = 'monthly'
+        self.acct_line.date_end = '2018-08-15'
+        self.acct_line._onchange_date_start()
+        self.contract.recurring_create_invoice()
+        first, last = self.acct_line._get_invoiced_period()
+        self.assertEqual(first, to_date('2018-02-05'))
+        self.assertEqual(last, to_date('2018-03-04'))
+        self.acct_line.recurring_next_date = '2018-06-05'
+        first, last = self.acct_line._get_invoiced_period()
+        self.assertEqual(first, to_date('2018-02-05'))
+        self.assertEqual(last, to_date('2018-06-04'))
+
     def test_get_invoiced_period_monthly_post_paid(self):
         self.acct_line.date_start = '2018-01-05'
         self.acct_line.recurring_invoicing_type = 'post-paid'
