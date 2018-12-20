@@ -24,6 +24,7 @@ class AccountAnalyticInvoiceLine(models.Model):
     )
     date_start = fields.Date(
         string='Date Start',
+        required=True,
         default=lambda self: fields.Date.context_today(self),
     )
     date_end = fields.Date(string='Date End', index=True)
@@ -82,6 +83,7 @@ class AccountAnalyticInvoiceLine(models.Model):
         related="contract_id.active",
         store=True,
         readonly=True,
+        default=True,
     )
 
     @api.multi
@@ -281,15 +283,6 @@ class AccountAnalyticInvoiceLine(models.Model):
                     % rec.name
                 )
 
-    @api.constrains('date_start')
-    def _check_date_start_recurring_invoices(self):
-        for line in self.filtered('contract_id.recurring_invoices'):
-            if not line.date_start:
-                raise ValidationError(
-                    _("You must supply a start date for contract line '%s'")
-                    % line.name
-                )
-
     @api.constrains('date_start', 'date_end')
     def _check_start_end_dates(self):
         for line in self.filtered('date_end'):
@@ -318,14 +311,15 @@ class AccountAnalyticInvoiceLine(models.Model):
     @api.multi
     def _prepare_invoice_line(self, invoice_id=False):
         self.ensure_one()
-        invoice_line = self.env['account.invoice.line'].new(
-            {
-                'product_id': self.product_id.id,
-                'quantity': self.quantity,
-                'uom_id': self.uom_id.id,
-                'discount': self.discount,
-            }
-        )
+        invoice_line_vals = {
+            'product_id': self.product_id.id,
+            'quantity': self.quantity,
+            'uom_id': self.uom_id.id,
+            'discount': self.discount,
+        }
+        if invoice_id:
+            invoice_line_vals['invoice_id'] = invoice_id.id
+        invoice_line = self.env['account.invoice.line'].new(invoice_line_vals)
         # Get other invoice line values from product onchange
         invoice_line._onchange_product_id()
         invoice_line_vals = invoice_line._convert_to_write(invoice_line._cache)
