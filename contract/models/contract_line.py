@@ -78,7 +78,10 @@ class AccountAnalyticInvoiceLine(models.Model):
         compute="_compute_state",
     )
     active = fields.Boolean(
-        string="Active", related="contract_id.active", strore=True
+        string="Active",
+        related="contract_id.active",
+        store=True,
+        readonly=True,
     )
 
     @api.multi
