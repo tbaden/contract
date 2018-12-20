@@ -176,9 +176,7 @@ class AccountAnalyticAccount(models.Model):
         return {
             'reference': self.code,
             'type': invoice_type,
-            'partner_id': self.partner_id.address_get(['invoice'])[
-                'invoice'
-            ],
+            'partner_id': self.partner_id.address_get(['invoice'])['invoice'],
             'currency_id': currency.id,
             'date_invoice': date_invoice,
             'journal_id': journal.id,
@@ -236,11 +234,13 @@ class AccountAnalyticAccount(models.Model):
             price_unit = invoice_line.price_unit
             invoice_line.invoice_id = new_invoice
             invoice_line._onchange_product_id()
-            invoice_line.update({
-                'name': name,
-                'account_analytic_id': account_analytic_id,
-                'price_unit': price_unit,
-            })
+            invoice_line.update(
+                {
+                    'name': name,
+                    'account_analytic_id': account_analytic_id,
+                    'price_unit': price_unit,
+                }
+            )
         return new_invoice._convert_to_write(new_invoice._cache)
 
     @api.model
@@ -264,7 +264,8 @@ class AccountAnalyticAccount(models.Model):
         final_invoices_values = []
         for invoice_values in invoices_values:
             final_invoices_values.append(
-                self._finalize_invoice_values(invoice_values))
+                self._finalize_invoice_values(invoice_values)
+            )
         invoices = self.env['account.invoice'].create(final_invoices_values)
         self._finalize_invoice_creation(invoices)
         return invoices
@@ -299,8 +300,10 @@ class AccountAnalyticAccount(models.Model):
         self.ensure_one()
         if date_ref:
             return self.recurring_invoice_line_ids.filtered(
-                lambda l: not l.is_canceled and l.recurring_next_date
-                and l.recurring_next_date <= date_ref)
+                lambda l: not l.is_canceled
+                and l.recurring_next_date
+                and l.recurring_next_date <= date_ref
+            )
         return False
 
     @api.multi

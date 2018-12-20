@@ -1292,8 +1292,10 @@ class TestContract(TestContractBase):
         invoice_lines = self.env['account.invoice.line'].search(
             [('account_analytic_id', 'in', contracts.ids)]
         )
-        self.assertEqual(len(contracts.mapped('recurring_invoice_line_ids')),
-                         len(invoice_lines))
+        self.assertEqual(
+            len(contracts.mapped('recurring_invoice_line_ids')),
+            len(invoice_lines),
+        )
 
     def test_get_invoiced_period_monthlylastday(self):
         self.acct_line.date_start = '2018-01-05'
