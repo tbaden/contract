@@ -298,13 +298,11 @@ class AccountAnalyticAccount(models.Model):
         :return: contract lines (account.analytic.invoice.line recordset)
         """
         self.ensure_one()
-        if date_ref:
-            return self.recurring_invoice_line_ids.filtered(
-                lambda l: not l.is_canceled
-                and l.recurring_next_date
-                and l.recurring_next_date <= date_ref
-            )
-        return False
+        return self.recurring_invoice_line_ids.filtered(
+            lambda l: not l.is_canceled
+            and l.recurring_next_date
+            and l.recurring_next_date <= date_ref
+        )
 
     @api.multi
     def _prepare_recurring_invoices_values(self, date_ref=False):
@@ -318,6 +316,10 @@ class AccountAnalyticAccount(models.Model):
         for contract in self:
             if not date_ref:
                 date_ref = contract.recurring_next_date
+            if not date_ref:
+                # this use case is possible when recurring_create_invoice is
+                # called for a finished contract
+                continue
             contract_lines = contract._get_lines_to_invoice(date_ref)
             if not contract_lines:
                 continue

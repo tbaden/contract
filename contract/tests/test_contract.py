@@ -659,10 +659,6 @@ class TestContract(TestContractBase):
         self.acct_line.write({'date_end': False, 'is_auto_renew': False})
         self.assertFalse(self.contract.date_end)
 
-    def test_last_date_invoiced_prepaid(self):
-        self.contract.recurring_create_invoice()
-        self
-
     def test_stop_contract_line(self):
         """It should put end to the contract line"""
         self.acct_line.write(
