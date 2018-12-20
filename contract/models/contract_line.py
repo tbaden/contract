@@ -24,6 +24,7 @@ class AccountAnalyticInvoiceLine(models.Model):
     )
     date_start = fields.Date(
         string='Date Start',
+        required=True,
         default=lambda self: fields.Date.context_today(self),
     )
     date_end = fields.Date(string='Date End', index=True)
