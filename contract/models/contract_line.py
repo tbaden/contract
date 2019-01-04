@@ -1,4 +1,5 @@
 # Copyright 2017 LasLabs Inc.
+# Copyright 2018 ACSONE SA/NV.
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
 from datetime import timedelta
@@ -316,6 +317,7 @@ class AccountAnalyticInvoiceLine(models.Model):
             'quantity': self.quantity,
             'uom_id': self.uom_id.id,
             'discount': self.discount,
+            'contract_line_id': self.id,
         }
         if invoice_id:
             invoice_line_vals['invoice_id'] = invoice_id.id
