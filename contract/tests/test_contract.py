@@ -769,6 +769,7 @@ class TestContract(TestContractBase):
             new_line.date_start, suspension_end + relativedelta(days=1)
         )
         self.assertEqual(new_line.date_end, new_date_end)
+        self.assertTrue(self.acct_line.is_suspended)
 
     def test_stop_plan_successor_contract_line_3(self):
         """
@@ -809,6 +810,7 @@ class TestContract(TestContractBase):
             new_line.date_start, suspension_end + relativedelta(days=1)
         )
         self.assertEqual(new_line.date_end, new_date_end)
+        self.assertTrue(self.acct_line.is_suspended)
 
     def test_stop_plan_successor_contract_line_3_without_end_date(self):
         """
@@ -845,6 +847,7 @@ class TestContract(TestContractBase):
             new_line.date_start, suspension_end + relativedelta(days=1)
         )
         self.assertFalse(new_line.date_end)
+        self.assertTrue(self.acct_line.is_suspended)
 
     def test_stop_plan_successor_contract_line_4(self):
         """

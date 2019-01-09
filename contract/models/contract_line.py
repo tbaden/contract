@@ -129,7 +129,11 @@ class AccountAnalyticInvoiceLine(models.Model):
     def _get_state_domain(self, state):
         today = fields.Date.context_today(self)
         if state == 'upcoming':
-            return ["&",('date_start', '>', today), ('is_canceled', '=', False)]
+            return [
+                "&",
+                ('date_start', '>', today),
+                ('is_canceled', '=', False),
+            ]
         if state == 'in-progress':
             return [
                 "&",
@@ -579,7 +583,7 @@ class AccountAnalyticInvoiceLine(models.Model):
             rec.date_start = new_date_start
 
     @api.multi
-    def stop(self, date_end, post_message=True):
+    def stop(self, date_end, is_suspended=False, post_message=True):
         """
         Put date_end on contract line
         We don't consider contract lines that end's before the new end date
@@ -606,9 +610,17 @@ class AccountAnalyticInvoiceLine(models.Model):
                             )
                         )
                         rec.contract_id.message_post(body=msg)
-                    rec.write({'date_end': date_end, 'is_auto_renew': False})
+                    rec.write(
+                        {
+                            'date_end': date_end,
+                            'is_auto_renew': False,
+                            "is_suspended": is_suspended,
+                        }
+                    )
                 else:
-                    rec.write({'is_auto_renew': False})
+                    rec.write(
+                        {'is_auto_renew': False, "is_suspended": is_suspended}
+                    )
         return True
 
     @api.multi
@@ -743,7 +755,9 @@ class AccountAnalyticInvoiceLine(models.Model):
                         + relativedelta(days=1)
                     )
                     rec.stop(
-                        date_start - relativedelta(days=1), post_message=False
+                        date_start - relativedelta(days=1),
+                        is_suspended=True,
+                        post_message=False,
                     )
                     contract_line |= rec.plan_successor(
                         new_date_start,
@@ -763,7 +777,9 @@ class AccountAnalyticInvoiceLine(models.Model):
                         new_date_end = rec.date_end
 
                     rec.stop(
-                        date_start - relativedelta(days=1), post_message=False
+                        date_start - relativedelta(days=1),
+                        is_suspended=True,
+                        post_message=False,
                     )
                     contract_line |= rec.plan_successor(
                         new_date_start,
