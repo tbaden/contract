@@ -55,6 +55,7 @@ class AccountAnalyticInvoiceLine(models.Model):
         copy=False,
         help="Contract Line origin of this one.",
     )
+    is_suspended = fields.Boolean(string="Suspended", default=False)
     is_plan_successor_allowed = fields.Boolean(
         string="Plan successor allowed?", compute='_compute_allowed'
     )
@@ -75,11 +76,14 @@ class AccountAnalyticInvoiceLine(models.Model):
         selection=[
             ('upcoming', 'Upcoming'),
             ('in-progress', 'In-progress'),
+            ('suspension-planed', 'Suspension Planed'),
+            ('suspended', 'Suspended'),
             ('upcoming-close', 'Upcoming Close'),
             ('closed', 'Closed'),
             ('canceled', 'Canceled'),
         ],
         compute="_compute_state",
+        search='_search_state',
     )
     active = fields.Boolean(
         string="Active",
@@ -93,19 +97,130 @@ class AccountAnalyticInvoiceLine(models.Model):
     def _compute_state(self):
         today = fields.Date.context_today(self)
         for rec in self:
-            if rec.date_start:
-                if rec.is_canceled:
-                    rec.state = 'canceled'
-                elif today < rec.date_start:
-                    rec.state = 'upcoming'
-                elif not rec.date_end or (
-                    today <= rec.date_end and rec.is_auto_renew
-                ):
-                    rec.state = 'in-progress'
-                elif today <= rec.date_end and not rec.is_auto_renew:
+            if rec.is_canceled:
+                rec.state = 'canceled'
+                continue
+
+            if rec.date_start and rec.date_start > today:
+                # Before period
+                rec.state = 'upcoming'
+                continue
+            if (
+                rec.date_start
+                and rec.date_start <= today
+                and (not rec.date_end or rec.date_end >= today)
+            ):
+                # In period
+                if rec.is_suspended:
+                    rec.state = 'suspension-planed'
+                    continue
+                if rec.date_end and not rec.is_auto_renew:
                     rec.state = 'upcoming-close'
                 else:
+                    rec.state = 'in-progress'
+                continue
+            if rec.date_end and rec.date_end < today:
+                if rec.is_suspended and not rec.successor_contract_line_id:
+                    rec.state = 'suspended'
+                else:
                     rec.state = 'closed'
+
+    @api.model
+    def _get_state_domain(self, state):
+        today = fields.Date.context_today(self)
+        if state == 'upcoming':
+            return ["&",('date_start', '>', today), ('is_canceled', '=', False)]
+        if state == 'in-progress':
+            return [
+                "&",
+                "&",
+                "&",
+                "&",
+                ('date_start', '<=', today),
+                ('is_auto_renew', '=', True),
+                ('is_suspended', '=', False),
+                ('is_canceled', '=', False),
+                "|",
+                ('date_end', '>=', today),
+                ('date_end', '=', False),
+            ]
+        if state == 'suspension-planed':
+            return [
+                "&",
+                "&",
+                "&",
+                ('date_start', '<=', today),
+                ('is_suspended', '=', True),
+                ('is_canceled', '=', False),
+                '|',
+                ('date_end', '>=', today),
+                ('date_end', '=', False),
+            ]
+        if state == 'suspended':
+            return [
+                "&",
+                "&",
+                "&",
+                ('date_end', '<', today),
+                ('successor_contract_line_id', '=', False),
+                ('is_suspended', '=', True),
+                ('is_canceled', '=', False),
+            ]
+        if state == 'upcoming-close':
+            return [
+                "&",
+                "&",
+                "&",
+                "&",
+                ('date_start', '<=', today),
+                ('is_auto_renew', '=', False),
+                ('is_suspended', '=', False),
+                ('is_canceled', '=', False),
+                '|',
+                ('date_end', '>=', today),
+                ('date_end', '=', False),
+            ]
+        if state == 'closed':
+            return [
+                "&",
+                "&",
+                ('is_canceled', '=', False),
+                ('date_end', '<', today),
+                "|",
+                "&",
+                ('is_suspended', '=', True),
+                ('successor_contract_line_id', '!=', False),
+                ('is_suspended', '=', False),
+            ]
+
+        if state == 'canceled':
+            return [('is_canceled', '=', True)]
+
+    @api.model
+    def _search_state(self, operator, value):
+        if operator == '!=' and not value:
+            return []
+        if operator == '=' and not value:
+            return [('id', '=', False)]
+        if operator == '=':
+            return self._get_state_domain(value)
+        if operator == '!=':
+            states = [
+                'upcoming',
+                'in-progress',
+                'suspension-planed',
+                'suspended',
+                'upcoming-close',
+                'closed',
+                'canceled',
+            ]
+            domain = []
+            for state in states:
+                if state != value:
+                    if domain:
+                        domain.insert(0, '|')
+                    domain.extend(self._get_state_domain(state))
+            return domain
 
     @api.depends(
         'date_start',
