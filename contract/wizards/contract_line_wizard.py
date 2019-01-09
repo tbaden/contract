@@ -17,6 +17,7 @@ class AccountAnalyticInvoiceLineWizard(models.TransientModel):
         comodel_name="account.analytic.invoice.line",
         string="Contract Line",
         required=True,
+        index=True,
     )
 
     @api.multi

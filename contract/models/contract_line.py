@@ -41,6 +41,7 @@ class AccountAnalyticInvoiceLine(models.Model):
         string="Successor Contract Line",
         required=False,
         readonly=True,
+        index=True,
         copy=False,
         help="In case of restart after suspension, this field contain the new "
         "contract line created.",
@@ -50,6 +51,7 @@ class AccountAnalyticInvoiceLine(models.Model):
         string="Predecessor Contract Line",
         required=False,
         readonly=True,
+        index=True,
         copy=False,
         help="Contract Line origin of this one.",
     )
