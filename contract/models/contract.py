@@ -48,7 +48,8 @@ class AccountAnalyticAccount(models.Model):
         compute='_compute_date_end', string='Date End', store=True
     )
     payment_term_id = fields.Many2one(
-        comodel_name='account.payment.term', string='Payment Terms'
+        comodel_name='account.payment.term', string='Payment Terms',
+        index=True,
     )
     invoice_count = fields.Integer(compute="_compute_invoice_count")
     fiscal_position_id = fields.Many2one(
