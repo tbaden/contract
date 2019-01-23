@@ -57,6 +57,22 @@ class AccountAnalyticAccount(models.Model):
         string='Fiscal Position',
         ondelete='restrict',
     )
+    invoice_partner_id = fields.Many2one(
+        string="Invoicing contact",
+        comodel_name='res.partner',
+        ondelete='restrict',
+    )
+    partner_id = fields.Many2one(
+        comodel_name='res.partner',
+        inverse='_inverse_partner_id',
+    )
+
+    @api.multi
+    def _inverse_partner_id(self):
+        for rec in self:
+            if not rec.invoice_partner_id:
+                rec.invoice_partner_id = rec.partner_id.address_get(
+                    ['invoice'])['invoice']
 
     @api.multi
     def _get_related_invoices(self):
@@ -168,6 +184,12 @@ class AccountAnalyticAccount(models.Model):
     def _onchange_partner_id(self):
         self.pricelist_id = self.partner_id.property_product_pricelist.id
         self.fiscal_position_id = self.partner_id.property_account_position_id
+        self.invoice_partner_id = self.partner_id.address_get(
+            ['invoice'])['invoice']
+        return {'domain': {'invoice_partner_id': [
+            '|',
+            ('id', 'parent_of', self.partner_id.id),
+            ('id', 'child_of', self.partner_id.id)]}}
 
     @api.constrains('partner_id', 'recurring_invoices')
     def _check_partner_id_recurring_invoices(self):
@@ -225,7 +247,7 @@ class AccountAnalyticAccount(models.Model):
         return {
             'reference': self.code,
             'type': invoice_type,
-            'partner_id': self.partner_id.address_get(['invoice'])['invoice'],
+            'partner_id': self.invoice_partner_id.id,
             'currency_id': currency.id,
             'date_invoice': date_invoice,
             'journal_id': journal.id,
