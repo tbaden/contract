@@ -90,7 +90,13 @@ class AccountAbstractAnalyticContractLine(models.AbstractModel):
         help="Renew every (Days/Week/Month/Year)",
     )
     auto_renew_rule_type = fields.Selection(
-        [('monthly', 'Month(s)'), ('yearly', 'Year(s)')],
+        [
+            ('daily', 'Day(s)'),
+            ('weekly', 'Week(s)'),
+            ('monthly', 'Month(s)'),
+            ('monthlylastday', 'Month(s) last day'),
+            ('yearly', 'Year(s)'),
+        ],
         default='yearly',
         string='Renewal type',
         help="Specify Interval for automatic renewal.",
