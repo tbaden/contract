@@ -94,7 +94,6 @@ class AccountAbstractAnalyticContractLine(models.AbstractModel):
             ('daily', 'Day(s)'),
             ('weekly', 'Week(s)'),
             ('monthly', 'Month(s)'),
-            ('monthlylastday', 'Month(s) last day'),
             ('yearly', 'Year(s)'),
         ],
         default='yearly',
