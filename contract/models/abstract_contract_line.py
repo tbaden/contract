@@ -201,12 +201,7 @@ class AccountAbstractAnalyticContractLine(models.AbstractModel):
             pricelist=self.contract_id.pricelist_id.id,
             uom=self.uom_id.id,
         )
-
-        name = product.name_get()[0][1]
-        if product.description_sale:
-            name += '\n' + product.description_sale
-        vals['name'] = name
-
+        vals['name'] = self.product_id.get_product_multiline_description_sale()
         vals['price_unit'] = product.price
         self.update(vals)
         return {'domain': domain}
