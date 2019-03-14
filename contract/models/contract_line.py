@@ -515,7 +515,9 @@ class AccountAnalyticInvoiceLine(models.Model):
         return invoice_line_vals
 
     @api.multi
-    def _get_period_to_invoice(self, last_date_invoiced, recurring_next_date):
+    def _get_period_to_invoice(
+        self, last_date_invoiced, recurring_next_date, stop_at_date_end=True
+    ):
         self.ensure_one()
         first_date_invoiced = False
         if not recurring_next_date:
@@ -540,8 +542,9 @@ class AccountAnalyticInvoiceLine(models.Model):
                 last_date_invoiced = recurring_next_date - relativedelta(
                     days=1
                 )
-        if self.date_end and self.date_end < last_date_invoiced:
-            last_date_invoiced = self.date_end
+        if stop_at_date_end:
+            if self.date_end and self.date_end < last_date_invoiced:
+                last_date_invoiced = self.date_end
         return first_date_invoiced, last_date_invoiced, recurring_next_date
 
     @api.multi
@@ -1081,7 +1084,7 @@ class AccountAnalyticInvoiceLine(models.Model):
 
     @api.multi
     def _get_quantity_to_invoice(
-            self, period_first_date, period_last_date, invoice_date
+        self, period_first_date, period_last_date, invoice_date
     ):
         self.ensure_one()
         return self.quantity
