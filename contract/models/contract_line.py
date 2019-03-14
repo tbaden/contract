@@ -658,8 +658,15 @@ class AccountAnalyticInvoiceLine(models.Model):
                 rec.cancel()
             else:
                 if not rec.date_end or rec.date_end > date_end:
+                    old_date_end = rec.date_end
+                    rec.write(
+                        {
+                            'date_end': date_end,
+                            'is_auto_renew': False,
+                            "manual_renew_needed": manual_renew_needed,
+                        }
+                    )
                     if post_message:
-                        old_date_end = rec.date_end
                         msg = _(
                             """Contract line for <strong>{product}</strong>
                             stopped: <br/>
@@ -671,13 +678,6 @@ class AccountAnalyticInvoiceLine(models.Model):
                             )
                         )
                         rec.contract_id.message_post(body=msg)
-                    rec.write(
-                        {
-                            'date_end': date_end,
-                            'is_auto_renew': False,
-                            "manual_renew_needed": manual_renew_needed,
-                        }
-                    )
                 else:
                     rec.write(
                         {
