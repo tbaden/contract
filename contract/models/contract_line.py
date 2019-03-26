@@ -659,13 +659,14 @@ class AccountAnalyticInvoiceLine(models.Model):
             else:
                 if not rec.date_end or rec.date_end > date_end:
                     old_date_end = rec.date_end
-                    rec.write(
-                        {
-                            'date_end': date_end,
-                            'is_auto_renew': False,
-                            "manual_renew_needed": manual_renew_needed,
-                        }
-                    )
+                    values = {
+                        'date_end': date_end,
+                        'is_auto_renew': False,
+                        'manual_renew_needed': manual_renew_needed,
+                    }
+                    if rec.last_date_invoiced == date_end:
+                        values['recurring_next_date'] = False
+                    rec.write(values)
                     if post_message:
                         msg = _(
                             """Contract line for <strong>{product}</strong>
