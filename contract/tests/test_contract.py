@@ -1160,8 +1160,17 @@ class TestContract(TestContractBase):
         )
 
     def test_cancel(self):
+        self.acct_line.write(
+            {
+                'date_end': self.today + relativedelta(months=5),
+                'is_auto_renew': True,
+            }
+        )
         self.acct_line.cancel()
         self.assertTrue(self.acct_line.is_canceled)
+        self.assertFalse(self.acct_line.is_auto_renew)
+        with self.assertRaises(ValidationError):
+            self.acct_line.is_auto_renew = True
         self.acct_line.uncancel(self.today)
         self.assertFalse(self.acct_line.is_canceled)
 
